@@ -29,74 +29,102 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
     # 定义损失函数和优化器
     criterion = nn.CrossEntropyLoss()
     optim = Adam(model.parameters(), lr=lr)
-
     if use_cuda:
         model = model.to(device)
         criterion = criterion.to(device)
-
     best_val_avg_acc = 0
     for epoch in range(epochs):
         total_loss_train = 0
         model.train()
         # 训练进度
-        for input_ids, attention_mask, token_type_ids, cls_idx, label_sel_col, _, label_cond_col, label_cond_op, _ in tqdm(
+        for input_ids, attention_mask, token_type_ids, cls_idx, label_sel_col, label_conn_op, label_cond_col, label_cond_op, label_cond_value in tqdm(
                 train_loader):
             # model要求输入的矩阵(hidden_size,sequence_size),需要把第二纬度去除.squeeze(1)
             input_ids = input_ids.squeeze(1).to(device)
             attention_mask = attention_mask.to(device)
             token_type_ids = token_type_ids.squeeze(1).to(device)
-            label_sel_col = label_sel_col.squeeze(-1).to(device)
-            label_cond_col = label_cond_col.squeeze(-1).to(device)
-            label_cond_op = label_cond_op.squeeze(-1).to(device)
-
-            # 模型输出
-            out_sel_col, out_cond_col, out_cond_op = model(input_ids, attention_mask, token_type_ids, cls_idx)
-            # 计算损失
-            loss_sel_col = criterion(out_sel_col, label_sel_col)
-            loss_cond_col = criterion(out_cond_col, label_cond_col)
-            loss_cond_op = criterion(out_cond_op, label_cond_op)
-            # todo 损失比例
-            total_loss_train = loss_sel_col + loss_cond_col + loss_cond_op
+            if type(model) is ColClassifierModel:
+                label_sel_col = label_sel_col.squeeze(-1).to(device)
+                label_cond_col = label_cond_col.squeeze(-1).to(device)
+                label_cond_op = label_cond_op.squeeze(-1).to(device)
+                # 模型输出
+                out_sel_col, out_cond_col, out_cond_op = model(input_ids, attention_mask, token_type_ids, cls_idx)
+                # 计算损失
+                loss_sel_col = criterion(out_sel_col, label_sel_col)
+                loss_cond_col = criterion(out_cond_col, label_cond_col)
+                loss_cond_op = criterion(out_cond_op, label_cond_op)
+                # todo 损失比例
+                total_loss_train = loss_sel_col + loss_cond_col + loss_cond_op
+            if type(model) is ValueClassifierModel:
+                label_conn_op = label_conn_op.squeeze(-1).to(device)
+                label_cond_values = label_cond_value.squeeze(1).to(device)
+                # 模型输出
+                out_conn_op, out_cond_values = model(input_ids, attention_mask, token_type_ids)
+                # 计算损失
+                lost_conn_op = criterion(out_conn_op, label_conn_op)
+                lost_cond_values = criterion(out_cond_values, label_cond_values)
+                # todo 损失比例
+                total_loss_train = lost_conn_op + lost_cond_values
             # 模型更新
             model.zero_grad()
             optim.zero_grad()
             total_loss_train.backward()
             optim.step()
-
         # 模型验证
+        val_avg_acc = 0
         out_all_sel_col = []
         out_all_cond_col = []
         out_all_cond_op = []
         label_all_sel_col = []
         label_all_cond_col = []
         label_all_cond_op = []
+        out_all_conn_op = []
+        out_all_cond_values = []
+        label_all_conn_op = []
+        label_all_cond_values = []
         # 验证无需梯度计算
         model.eval()
         with torch.no_grad():
             # 使用当前epoch训练好的模型验证
-            for input_ids, attention_mask, token_type_ids, cls_idx, label_sel_col, _, label_cond_col, label_cond_op, _ in val_loader:
+            for input_ids, attention_mask, token_type_ids, cls_idx, label_sel_col, label_conn_op, label_cond_col, label_cond_op, label_cond_value in val_loader:
                 input_ids = input_ids.squeeze(1).to(device)
                 attention_mask = attention_mask.to(device)
                 token_type_ids = token_type_ids.squeeze(1).to(device)
-                label_sel_col = label_sel_col.squeeze(-1).to(device)
-                label_cond_col = label_cond_col.squeeze(-1).to(device)
-                label_cond_op = label_cond_op.squeeze(-1).to(device)
-                # 模型输出
-                out_sel_col, out_cond_col, out_cond_op = model(input_ids, attention_mask, token_type_ids, cls_idx)
+                if type(model) is ColClassifierModel:
+                    label_sel_col = label_sel_col.squeeze(-1).to(device)
+                    label_cond_col = label_cond_col.squeeze(-1).to(device)
+                    label_cond_op = label_cond_op.squeeze(-1).to(device)
+                    # 模型输出
+                    out_sel_col, out_cond_col, out_cond_op = model(input_ids, attention_mask, token_type_ids, cls_idx)
+                    out_all_sel_col.append(out_sel_col.argmax(dim=1).cpu().numpy())
+                    out_all_cond_col.append(out_cond_col.argmax(dim=1).cpu().numpy())
+                    out_all_cond_op.append(out_cond_op.argmax(dim=1).cpu().numpy())
+                    label_all_sel_col.append(label_sel_col.cpu().numpy())
+                    label_all_cond_col.append(label_cond_col.cpu().numpy())
+                    label_all_cond_op.append(label_cond_op.cpu().numpy())
+                if type(model) is ValueClassifierModel:
+                    label_conn_op = label_conn_op.squeeze(-1).to(device)
+                    # reshape(-1)需要转成一维数组才能计算准确率
+                    label_cond_values = label_cond_value.squeeze(1).to(device).reshape(-1)
+                    # 模型输出
+                    out_conn_op, out_cond_values = model(input_ids, attention_mask, token_type_ids)
+                    out_all_conn_op.append(out_conn_op.argmax(dim=1).cpu().numpy())
+                    out_all_cond_values.append(out_cond_values.argmax(dim=1).reshape(-1).cpu().numpy())
+                    label_all_conn_op.append(label_conn_op.cpu().numpy())
+                    label_all_cond_values.append(label_cond_values.cpu().numpy())
 
-                out_all_sel_col.append(out_sel_col.argmax(dim=1).cpu().numpy())
-                out_all_cond_col.append(out_cond_col.argmax(dim=1).cpu().numpy())
-                out_all_cond_op.append(out_cond_op.argmax(dim=1).cpu().numpy())
-                label_all_sel_col.append(label_sel_col.cpu().numpy())
-                label_all_cond_col.append(label_cond_col.cpu().numpy())
-                label_all_cond_op.append(label_cond_op.cpu().numpy())
-
-        val_sel_col_acc = metrics.accuracy_score(np.concatenate(out_all_sel_col), np.concatenate(label_all_sel_col))
-        val_cond_col_acc = metrics.accuracy_score(np.concatenate(out_all_cond_col), np.concatenate(label_all_cond_col))
-        val_cond_op_acc = metrics.accuracy_score(np.concatenate(out_all_cond_op), np.concatenate(label_all_cond_op))
-        # todo 准确率计算逻辑
-        val_avg_acc = (val_sel_col_acc + val_cond_col_acc + val_cond_op_acc) / 3
-
+        if type(model) is ColClassifierModel:
+            val_sel_col_acc = metrics.accuracy_score(np.concatenate(out_all_sel_col), np.concatenate(label_all_sel_col))
+            val_cond_col_acc = metrics.accuracy_score(np.concatenate(out_all_cond_col),
+                                                      np.concatenate(label_all_cond_col))
+            val_cond_op_acc = metrics.accuracy_score(np.concatenate(out_all_cond_op), np.concatenate(label_all_cond_op))
+            # todo 准确率计算逻辑
+            val_avg_acc = (val_sel_col_acc + val_cond_col_acc + val_cond_op_acc) / 3
+        if type(model) is ValueClassifierModel:
+            val_conn_op_acc = metrics.accuracy_score(np.concatenate(out_all_conn_op), np.concatenate(label_all_conn_op))
+            val_cond_values_acc = metrics.accuracy_score(np.concatenate(out_all_cond_values),
+                                                         np.concatenate(label_all_cond_values))
+            val_avg_acc = (val_conn_op_acc + val_cond_values_acc) / 2
         # save model
         if val_avg_acc > best_val_avg_acc:
             best_val_avg_acc = val_avg_acc
@@ -146,7 +174,7 @@ if __name__ == '__main__':
     dateset = Dataset(list_input_features)
     # 创建模型
     colModel = ColClassifierModel('../bert-base-chinese', hidden_size, len(get_cond_op_dict()))
-    valueModel = ValueClassifierModel('../bert-base-chinese', hidden_size, 2, len(get_conn_op_dict()))
+    valueModel = ValueClassifierModel('../bert-base-chinese', hidden_size, 2, len(get_conn_op_dict()), question_length)
     # 分割数据集
     total_size = len(label_datas)
     train_size = int(0.8 * total_size)
@@ -154,6 +182,10 @@ if __name__ == '__main__':
     test_size = total_size - train_size - val_size
     # 分割数据集
     train_dataset, val_dataset, test_dataset = random_split(dateset, [train_size, val_size, test_size])
-    print('train begin')
-    train(colModel, '../result-model/classifier-model.pkl', train_dataset, val_dataset, batch_size, learn_rate, 5)
-    print('train finish')
+    # print('train column model begin')
+    # train(colModel, '../result-model/classifier-model.pkl', train_dataset, val_dataset, batch_size, learn_rate, epochs)
+    # print('train column model finish')
+    print('train value model begin')
+    train(valueModel, '../result-model/classifier-model.pkl', train_dataset, val_dataset, batch_size, learn_rate,
+          epochs)
+    print('train value model finish')
