@@ -81,3 +81,14 @@ def get_cond_op_dict():
 def get_conn_op_dict():
     conn_op_dict = {'none': 0, 'and': 1, 'or': 2}
     return conn_op_dict
+
+
+def get_values_by_idx(question, value1, value2, conn):
+    question_fill = question.ljust(63)
+    real_value1 = ''
+    real_value2 = ''
+    if value1[0] < value1[1]:
+        real_value1 = question_fill[value1[0]:value1[1] + 1]
+    if conn != get_conn_op_dict()['none'] and value1[1] < value2[0] < value2[1]:
+        real_value2 = question_fill[value2[0]:value2[1] + 1]
+    return real_value1.strip(), real_value2.strip()
