@@ -32,6 +32,20 @@ def read_train_datas(path):
     return data_list
 
 
+def read_predict_datas(path):
+    """
+    :param path: 预测数据路径
+    :return: 预测数据
+    """
+    questions = []
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            item = json.loads(line)
+            question = item['question']
+            questions.append([question])
+    return questions
+
+
 def value_start_end(question, value):
     """
     get the start and end index of the value in the question

@@ -124,9 +124,12 @@ class InputFeatures(object):
         cls_idx = self.get_cls_idx(columns)
         columns_encode, columns_segment_id = self.encode_columns(get_columns())
         for data in datas:
-            label = Label(label_sel_col=[data[1]], label_conn_op=[data[3]],
-                          label_cond=[Conditions(cond[0], cond[1], cond[2:4]) for cond in data[2]] if data[
-                                                                                                          2] is not None else None)
+            # if contain label data
+            label = None
+            if len(data) > 1:
+                label = Label(label_sel_col=[data[1]], label_conn_op=[data[3]],
+                              label_cond=[Conditions(cond[0], cond[1], cond[2:4]) for cond in data[2]] if data[
+                                                                                                              2] is not None else None)
             question = data[0]
             # 编码(question+columns)
             input_ids, attention_mask, token_type_ids = self.encode_question_with_columns(self.question_length,

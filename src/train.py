@@ -166,15 +166,19 @@ if __name__ == '__main__':
     epochs = 5
     question_length = 128
     max_length = 512
+    train_data_path = '../train-datas/waic_nl2sql_train.jsonl'
+    pretrain_model_path = '../bert-base-chinese'
+    save_column_model_path = '../result-model/classifier-column-model.pkl'
+    save_value_model_path = '../result-model/classifier-value-model.pkl'
     # 加载数据
-    label_datas = read_train_datas('../train-datas/waic_nl2sql_train.jsonl')
+    label_datas = read_train_datas(train_data_path)
     # 提取特征数据
-    list_input_features = InputFeatures('../bert-base-chinese', question_length, max_length).list_features(label_datas)
+    list_input_features = InputFeatures(pretrain_model_path, question_length, max_length).list_features(label_datas)
     # 初始化dataset
     dateset = Dataset(list_input_features)
     # 创建模型
-    colModel = ColClassifierModel('../bert-base-chinese', hidden_size, len(get_cond_op_dict()))
-    valueModel = ValueClassifierModel('../bert-base-chinese', hidden_size, 2, len(get_conn_op_dict()), question_length)
+    col_model = ColClassifierModel(pretrain_model_path, hidden_size, len(get_cond_op_dict()))
+    value_model = ValueClassifierModel(pretrain_model_path, hidden_size, len(get_conn_op_dict()), question_length)
     # 分割数据集
     total_size = len(label_datas)
     train_size = int(0.8 * total_size)
@@ -182,10 +186,10 @@ if __name__ == '__main__':
     test_size = total_size - train_size - val_size
     # 分割数据集
     train_dataset, val_dataset, test_dataset = random_split(dateset, [train_size, val_size, test_size])
-    # print('train column model begin')
-    # train(colModel, '../result-model/classifier-model.pkl', train_dataset, val_dataset, batch_size, learn_rate, epochs)
-    # print('train column model finish')
+    print('train column model begin')
+    train(col_model, save_column_model_path, train_dataset, val_dataset, batch_size, learn_rate, epochs)
+    print('train column model finish')
     print('train value model begin')
-    train(valueModel, '../result-model/classifier-model.pkl', train_dataset, val_dataset, batch_size, learn_rate,
+    train(value_model, save_value_model_path, train_dataset, val_dataset, batch_size, learn_rate,
           epochs)
     print('train value model finish')

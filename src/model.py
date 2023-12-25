@@ -45,12 +45,12 @@ class ColClassifierModel(nn.Module):
 
 
 class ValueClassifierModel(nn.Module):
-    def __init__(self, model_path, hidden_size, max_value_length, conn_op_length, question_length, dropout=0.5):
+    def __init__(self, model_path, hidden_size, conn_op_length, question_length, cond_value_length=2, dropout=0.5):
         super(ValueClassifierModel, self).__init__()
         self.bert = BertModel.from_pretrained(model_path)
         self.dropout = nn.Dropout(dropout)
         # todo 最大条件值数量
-        self.cond_values_classifier = nn.Linear(hidden_size, max_value_length)
+        self.cond_values_classifier = nn.Linear(hidden_size, cond_value_length)
         self.conn_op_classifier = nn.Linear(hidden_size, conn_op_length)
         self.question_length = question_length
 
