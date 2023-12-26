@@ -29,7 +29,7 @@ def get_topk_values(out_cond_value, k):
 
 
 def predict(questions, predict_result_path, pretrain_model_path, column_model_path, value_model_path, hidden_size,
-            batch_size, question_length, max_length, k=2):
+            batch_size, question_length, max_length, k=2, table_name='table_name'):
     # 创建模型
     col_model = ColClassifierModel(pretrain_model_path, hidden_size, len(get_cond_op_dict()))
     value_model = ValueClassifierModel(pretrain_model_path, hidden_size, len(get_conn_op_dict()), question_length)
@@ -91,7 +91,7 @@ def predict(questions, predict_result_path, pretrain_model_path, column_model_pa
             conn_op = pre_all_conn_op[i].item()
             real_value1, real_value2 = get_values_by_idx(question, cond_values[0], cond_values[1], conn_op)
             if real_value1 == '' and real_value2 == '':
-                dict_str = {"question": question, "table_id": "Table_Name",
+                dict_str = {"question": question, "table_id": table_name,
                             "sql": {"sel": [sel_col], "agg": [0], "limit": 0, "orderby": [], "asc_desc": 0,
                                     "cond_conn_op": 0}, "keywords": {"sel_cols": [sel_col_name], "values": []}}
                 json_str = json.dumps(dict_str, ensure_ascii=False)
@@ -104,9 +104,10 @@ def predict(questions, predict_result_path, pretrain_model_path, column_model_pa
                     cond = [[cond_col, cond_op, real_value1]]
                     values = [real_value1]
                     conn_op = 0
-                dict_str = {"question": question, "table_id": "Table_Name",
+                dict_str = {"question": question, "table_id": table_name,
                             "sql": {"sel": [sel_col], "agg": [0], "limit": 0, "orderby": [], "asc_desc": 0,
-                                    "cond_conn_op": conn_op, 'conds': cond}, "keywords": {"sel_cols": [sel_col_name], "values": values}}
+                                    "cond_conn_op": conn_op, 'conds': cond},
+                            "keywords": {"sel_cols": [sel_col_name], "values": values}}
                 json_str = json.dumps(dict_str, ensure_ascii=False)
                 wf.write(json_str + '\n')
 
