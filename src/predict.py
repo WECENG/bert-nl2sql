@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from datasets import InputFeatures, Dataset
 from model import ColClassifierModel, ValueClassifierModel
-from utils import get_cond_op_dict, read_predict_datas, get_conn_op_dict, get_values_by_idx, get_columns
+from utils import get_cond_op_dict, read_predict_datas, get_conn_op_dict, get_values_by_idx, get_columns, get_agg_dict
 
 
 def get_topk_values(out_cond_value, k):
@@ -31,8 +31,9 @@ def get_topk_values(out_cond_value, k):
 def predict(questions, predict_result_path, pretrain_model_path, column_model_path, value_model_path, hidden_size,
             batch_size, question_length, max_length, k=2, table_name='table_name'):
     # 创建模型
-    col_model = ColClassifierModel(pretrain_model_path, hidden_size, len(get_cond_op_dict()))
-    value_model = ValueClassifierModel(pretrain_model_path, hidden_size, len(get_conn_op_dict()), question_length)
+    col_model = ColClassifierModel(pretrain_model_path, hidden_size, len(get_agg_dict()), len(get_conn_op_dict()),
+                                   len(get_cond_op_dict()))
+    value_model = ValueClassifierModel(pretrain_model_path, hidden_size, question_length)
     # 提取特征数据（不含label的数据）
     input_features = InputFeatures(pretrain_model_path, question_length, max_length).list_features(questions)
     dataset = Dataset(input_features)

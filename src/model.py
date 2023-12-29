@@ -10,16 +10,14 @@ from transformers import BertModel
 
 
 class ColClassifierModel(nn.Module):
-    def __init__(self, model_path, hidden_size, cond_op_length, dropout=0.5):
+    def __init__(self, model_path, hidden_size, agg_length, conn_op_length, cond_op_length, dropout=0.5):
         super(ColClassifierModel, self).__init__()
         self.bert = BertModel.from_pretrained(model_path)
         self.dropout = nn.Dropout(dropout)
-        # todo 可以不止一列
-        self.sel_col_classifier = nn.Linear(hidden_size, 1)
-        # todo 条件不止一列
-        self.cond_col_classifier = nn.Linear(hidden_size, 1)
         # out classes需要纬度必须大于label中size(classes)，否则会出现Assertion `t >= 0 && t < n_classes` failed.
-        self.cond_op_classifier = nn.Linear(hidden_size, cond_op_length)
+        self.agg_classifier = nn.Linear(hidden_size, agg_length)
+        self.cond_ops_classifier = nn.Linear(hidden_size, cond_op_length)
+        self.conn_op_classifier = nn.Linear(hidden_size, conn_op_length)
 
     def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, cls_idx=None):
         # 输出最后一层隐藏状态以及池化层
@@ -36,36 +34,31 @@ class ColClassifierModel(nn.Module):
         # 简化写法
         cls_cols = dropout_hidden_state[:, cls_idx[0], :]
 
-        out_sel_col = self.sel_col_classifier(cls_cols).squeeze(-1)
-        out_cond_col = self.cond_col_classifier(cls_cols).squeeze(-1)
+        out_agg = self.agg_classifier(cls_cols)
+        out_cond_ops = self.cond_ops_classifier(cls_cols)
 
-        out_cond_op = self.cond_op_classifier(dropout_output)
+        out_conn_op = self.conn_op_classifier(dropout_output)
 
-        return out_sel_col, out_cond_col, out_cond_op
+        return out_agg, out_cond_ops, out_conn_op
 
 
 class ValueClassifierModel(nn.Module):
-    def __init__(self, model_path, hidden_size, conn_op_length, question_length, cond_value_length=2, dropout=0.5):
+    def __init__(self, model_path, hidden_size, question_length, cond_value_length=2, dropout=0.5):
         super(ValueClassifierModel, self).__init__()
         self.bert = BertModel.from_pretrained(model_path)
         self.dropout = nn.Dropout(dropout)
-        # todo 最大条件值数量
-        self.cond_values_classifier = nn.Linear(hidden_size, cond_value_length)
-        self.conn_op_classifier = nn.Linear(hidden_size, conn_op_length)
+        self.cond_vals_classifier = nn.Linear(hidden_size, cond_value_length)
         self.question_length = question_length
 
     def forward(self, input_ids=None, attention_mask=None, token_type_ids=None):
         # 输出最后一层隐藏状态以及池化层
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask,
                             token_type_ids=token_type_ids)
-        dropout_output = self.dropout(outputs.pooler_output)
         dropout_hidden_state = self.dropout(outputs.last_hidden_state)
-
-        out_conn_op = self.conn_op_classifier(dropout_output)
 
         # 提取问题特征信息
         cond_values = dropout_hidden_state[:, 1:int(self.question_length), :]
 
-        out_cond_values = self.cond_values_classifier(cond_values)
+        out_cond_vals = self.cond_vals_classifier(cond_values)
 
-        return out_conn_op, out_cond_values
+        return out_cond_vals

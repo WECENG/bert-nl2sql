@@ -7,28 +7,43 @@ __Created__ = 2023/12/18 16:37
 """
 import json
 
+import torch
+
 
 def read_train_datas(path):
     """
-    :return: [[question, sel_col, conds:[col, op, start, end], conn_op],...]
+    :return: [[question, agg, conn_op, cond_ops, cond_vals],...], cond_vals:[[val_start_idx,val_end_idx],...]
     """
+    column_length = len(get_columns())
     with open(path, 'r', encoding='utf-8') as f:
         data_list = []
         for line in f:
             item = json.loads(line)
+            # question
             question = item['question']
-            sel = item['sql']['sel'][0]
-            cond_conn_op = item['sql']['cond_conn_op']
+            # agg
+            sel = item['sql']['sel']
+            agg_op = item['sql']['agg']
+            agg = [get_agg_dict()['none']] * column_length
+            for i in range(len(sel)):
+                sel_col_item = sel[i]
+                agg_op_item = agg_op[i]
+                agg[sel_col_item] = agg_op_item
+            # conn_op
+            conn_op = item['sql']['cond_conn_op']
+            # cond_ops & cond_vals
+            cond_ops = [get_cond_op_dict()['none']] * column_length
+            cond_vals = [torch.zeros((2, ), dtype=torch.int)] * column_length
             if item['sql'].get('conds') is not None:
                 conds = item['sql']['conds']
                 for i, cond in enumerate(conds):
+                    cond_col_item = cond[0]
+                    cond_op_item = cond[1]
+                    cond_ops[cond_col_item] = cond_op_item
                     value = cond[2]
                     start, end = value_start_end(question, value)
-                    cond[2] = start
-                    cond.append(end)
-            else:
-                conds = None
-            data_list.append([question, sel, conds, cond_conn_op])
+                    cond_vals[cond_col_item] = [start, end]
+            data_list.append([question, agg, conn_op, cond_ops, cond_vals])
     return data_list
 
 
@@ -81,6 +96,11 @@ def get_cond_op_dict():
 def get_conn_op_dict():
     conn_op_dict = {'none': 0, 'and': 1, 'or': 2}
     return conn_op_dict
+
+
+def get_agg_dict():
+    agg_dict = {'': 0, 'AVG': 1, 'MAX': 2, 'MIN': 3, 'COUNT': 4, 'SUM': 5, 'none': 6}
+    return agg_dict
 
 
 def get_values_by_idx(question, value1, value2, conn):

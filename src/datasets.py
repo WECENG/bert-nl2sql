@@ -11,40 +11,29 @@ import numpy as np
 import torch.utils.data
 from transformers import BertTokenizer
 
-from utils import get_columns, get_cond_op_dict
-
-
-# sql查询条件
-class Conditions(object):
-    def __init__(self, cond_col=None, cond_op=None, cond_value=None):
-        """
-        example [cond_col cond_op cond_value]
-        :param cond_col: sql的查询条件列
-        :param cond_op: sql的查询条件操作符
-        :param cond_value: sql的查询条件值
-        """
-        self.cond_col = cond_col
-        self.cond_op = cond_op
-        self.cond_value = cond_value
+from utils import get_columns
 
 
 # label
 class Label(object):
-    def __init__(self, label_sel_col=None, label_conn_op=None, label_cond: List[Conditions] = None):
+    def __init__(self, label_agg: List = None, label_conn_op=None, label_cond_ops: List = None,
+                 label_cond_vals: List = None):
         """
-        example [select label_sel_col from table where label_condition[0] label_conn_op label_condition[1] label_conn_op ...]
-        :param label_sel_col:
-        :param label_conn_op:
-        :param label_cond:
+        训练标签信息
+        :param label_agg: 聚合函数
+        :param label_conn_op: 连接操作符
+        :param label_cond_ops: 条件操作符
+        :param label_cond_vals: 条件值
         """
-        self.label_sel_col = label_sel_col
+        self.label_agg = label_agg
         self.label_conn_op = label_conn_op
-        self.label_cond = label_cond
+        self.label_cond_ops = label_cond_ops
+        self.label_cond_vals = label_cond_vals
 
 
 class InputFeatures(object):
     def __init__(self, model_path=None, question_length=128, max_length=512, input_ids=None, attention_mask=None,
-                 token_type_ids=None, cls_idx=None, label=None):
+                 token_type_ids=None, cls_idx=None, label: Label = None):
         if model_path is not None:
             self.tokenizer = BertTokenizer.from_pretrained(model_path)
         self.question_length = question_length
@@ -127,9 +116,7 @@ class InputFeatures(object):
             # if contain label data
             label = None
             if len(data) > 1:
-                label = Label(label_sel_col=[data[1]], label_conn_op=[data[3]],
-                              label_cond=[Conditions(cond[0], cond[1], cond[2:4]) for cond in data[2]] if data[
-                                                                                                              2] is not None else None)
+                label = Label(label_agg=data[1], label_conn_op=data[2], label_cond_ops=data[3], label_cond_vals=data[4])
             question = data[0]
             # 编码(question+columns)
             input_ids, attention_mask, token_type_ids = self.encode_question_with_columns(self.question_length,
@@ -158,34 +145,10 @@ class Dataset(torch.utils.data.Dataset):
         cls_idx = np.array(feature.cls_idx)
         if feature.label is not None:
             label: Label = feature.label
-            label_sel_col = np.array(label.label_sel_col)
+            label_agg = np.array(label.label_agg)
             label_conn_op = np.array(label.label_conn_op)
-            label_cond = np.array(label.label_cond)
-            if label_cond.any() is None or label_cond.size == 0:
-                # 初始化一维数组，保证纬度一致
-                # 52对应‘无’这一列
-                label_cond_col = np.array([len(get_columns()) - 1], dtype=np.int32)
-                # 7对应‘none’操作符
-                label_cond_op = np.array([len(get_cond_op_dict()) - 1], dtype=np.int32)
-                label_cond_value = np.array([[0, 0]], dtype=np.int32)
-            else:
-                # 转化成一维数组，保证纬度一致
-                label_cond_col = np.array([[item.cond_col] for item in label_cond]).ravel()[:np.prod(1)].reshape(
-                    1)
-                label_cond_op = np.array([[item.cond_op] for item in label_cond]).ravel()[:np.prod(1)].reshape(
-                    1)
-                label_cond_value = np.array([item.cond_value for item in label_cond]).ravel()[:np.prod((1, 2))].reshape(
-                    (1, 2))
-            # 打印样本信息
-            print(f"Sample {item}:")
-            print(f"input_ids shape: {input_ids.shape}")
-            print(f"attention_mask shape: {attention_mask.shape}")
-            print(f"token_type_ids shape: {token_type_ids.shape}")
-            print(f"label_sel_col shape: {label_sel_col.shape}")
-            print(f"label_conn_op shape: {label_conn_op.shape}")
-            print(f"label_cond_col shape: {label_cond_col.shape}")
-            print(f"label_cond_op shape: {label_cond_op.shape}")
-            print(f"label_cond_value shape: {label_cond_value.shape}")
-            return input_ids, attention_mask, token_type_ids, cls_idx, label_sel_col, label_conn_op, label_cond_col, label_cond_op, label_cond_value
+            label_cond_ops = np.array(label.label_cond_ops)
+            label_cond_vals = np.array([np.array(val) for val in label.label_cond_vals])
+            return input_ids, attention_mask, token_type_ids, cls_idx, label_agg, label_conn_op, label_cond_ops, label_cond_vals
         else:
             return input_ids, attention_mask, token_type_ids, cls_idx
