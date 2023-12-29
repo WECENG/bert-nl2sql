@@ -44,48 +44,33 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
             attention_mask = attention_mask.to(device)
             token_type_ids = token_type_ids.squeeze(1).to(device)
             if type(model) is ColClassifierModel:
-                label_agg = label_agg.to(dtype=torch.float, device=device)
-                label_conn_op = label_conn_op.to(dtype=torch.float, device=device)
-                label_cond_ops = label_cond_ops.to(dtype=torch.float, device=device)
+                # reshape(-1)合并一二纬度
+                label_agg = label_agg.to(device).reshape(-1)
+                label_conn_op = label_conn_op.to(device)
+                label_cond_ops = label_cond_ops.to(device).reshape(-1)
                 # 模型输出
                 out_agg, out_cond_ops, out_conn_op = model(input_ids, attention_mask, token_type_ids, cls_idx)
-                out_agg = out_agg.argmax(dim=2).to(dtype=torch.float, device=device)
-                out_cond_ops = out_cond_ops.argmax(dim=2).to(dtype=torch.float, device=device)
-                out_conn_op = out_conn_op.argmax(dim=1).to(dtype=torch.float, device=device)
+                out_agg = out_agg.to(device).reshape(-1, out_agg.size(2))
+                out_cond_ops = out_cond_ops.to(device).reshape(-1, out_cond_ops.size(2))
+                out_conn_op = out_conn_op.to(device)
                 # 计算损失
-                loss_agg = criterion(label_agg, out_agg)
+                loss_agg = criterion(out_agg, label_agg)
                 loss_conn_op = criterion(out_conn_op, label_conn_op)
                 loss_cond_ops = criterion(out_cond_ops, label_cond_ops)
-                # todo 损失比例
+                # 损失比例
                 total_loss_train = loss_agg + loss_conn_op + loss_cond_ops
-                total_loss_train.requires_grad_(True)
+
             if type(model) is ValueClassifierModel:
                 label_cond_vals = label_cond_vals.to(dtype=torch.float, device=device)
-                # cond_ops中不为'none'操作的数量
-                label_cond_counts = np.count_nonzero(label_cond_ops != get_cond_op_dict()['none'], axis=1)
                 # 模型输出
-                out_cond_vals = model(input_ids, attention_mask, token_type_ids)
-                # 按照cond_ops中对应的数量n提取出out_cond_vals前n个最大值
-                cond_vals = [torch.topk(out_cond_vals[i], k=label_cond_counts[i], dim=0, largest=True).indices for i in
-                             range(len(out_cond_vals))]
-                # 按照label_cond_vals中不为[0,0]的元素位置进行填充
-                cond_vals_filled = []
-                for label_cond_val, cond_val in zip(label_cond_vals, cond_vals):
-                    cond_idx = 0
-                    cond_val_fill = torch.zeros((len(label_cond_val), 2), dtype=torch.int)
-                    # 使用 enumerate 获取索引和值
-                    for i, cond_item in enumerate(label_cond_val):
-                        # detach()为了不影响梯度计算
-                        if not torch.equal(cond_item.clone().detach(), torch.zeros((2,), dtype=torch.float).to(device)):
-                            cond_val_fill[i] = cond_val[cond_idx]
-                            cond_idx += 1
-                    cond_vals_filled.append(cond_val_fill)
-                out_cond_vals = torch.stack(cond_vals_filled, dim=0).to(dtype=torch.float,
-                                                                        device=device)
+                out_cond_vals = model(input_ids, attention_mask, token_type_ids, label_cond_ops, label_cond_vals,
+                                      device)
                 # 计算损失
+                label_cond_vals = label_cond_vals.reshape(-1)
+                out_cond_vals = out_cond_vals.reshape(-1)
                 lost_cond_vals = criterion(out_cond_vals, label_cond_vals)
-                total_loss_train = lost_cond_vals
-                total_loss_train.requires_grad_(True)
+                total_loss_train = lost_cond_vals.requires_grad_(True)
+
             # 模型更新
             model.zero_grad()
             optim.zero_grad()
@@ -110,15 +95,14 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
                 attention_mask = attention_mask.to(device)
                 token_type_ids = token_type_ids.squeeze(1).to(device)
                 if type(model) is ColClassifierModel:
-                    label_agg = label_agg.to(dtype=torch.float, device=device)
+                    label_agg = label_agg.to(dtype=torch.float, device=device).reshape(-1)
                     label_conn_op = label_conn_op.to(dtype=torch.float, device=device)
-                    label_cond_ops = label_cond_ops.to(dtype=torch.float, device=device)
-                    # 模型输出
+                    label_cond_ops = label_cond_ops.to(dtype=torch.float, device=device).reshape(-1)
                     # 模型输出
                     out_agg, out_cond_ops, out_conn_op = model(input_ids, attention_mask, token_type_ids, cls_idx)
-                    out_agg = out_agg.argmax(dim=2).to(device)
-                    out_cond_ops = out_cond_ops.argmax(dim=2).to(device)
-                    out_conn_op = out_conn_op.argmax(dim=1).to(device)
+                    out_agg = out_agg.argmax(dim=2).to(dtype=torch.float, device=device).reshape(-1)
+                    out_cond_ops = out_cond_ops.argmax(dim=2).to(dtype=torch.float, device=device).reshape(-1)
+                    out_conn_op = out_conn_op.argmax(dim=1).to(dtype=torch.float, device=device)
                     out_all_agg.append(out_agg.cpu().numpy())
                     out_all_conn_op.append(out_conn_op.cpu().numpy())
                     out_all_cond_ops.append(out_cond_ops.cpu().numpy())
@@ -126,25 +110,28 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
                     label_all_conn_op.append(label_conn_op.cpu().numpy())
                     label_all_cond_ops.append(label_cond_ops.cpu().numpy())
                 if type(model) is ValueClassifierModel:
-                    # reshape(-1)需要转成一维数组才能计算准确率
-                    label_cond_vals = label_cond_vals.squeeze(1).to(dtype=torch.float, device=device).reshape(-1)
+                    label_cond_vals = label_cond_vals.to(dtype=torch.float, device=device)
                     # 模型输出
-                    out_cond_vals = model(input_ids, attention_mask, token_type_ids)
-                    out_all_cond_vals.append(out_cond_vals.argmax(dim=1).reshape(-1).cpu().numpy())
+                    out_cond_vals = model(input_ids, attention_mask, token_type_ids, label_cond_ops, label_cond_vals,
+                                          device)
+                    out_cond_vals = out_cond_vals.reshape(-1)
+                    # reshape(-1)需要转成一维数组才能计算准确率
+                    label_cond_vals = label_cond_vals.reshape(-1)
+                    out_all_cond_vals.append(out_cond_vals.cpu().numpy())
                     label_all_cond_vals.append(label_cond_vals.cpu().numpy())
 
         if type(model) is ColClassifierModel:
-            val_agg_acc = metrics.accuracy_score(np.concatenate(np.concatenate(out_all_agg)),
-                                                 np.concatenate(np.concatenate(label_all_agg)))
-            val_conn_op_acc = metrics.accuracy_score(np.concatenate(out_all_conn_op),
-                                                     np.concatenate(label_all_conn_op))
-            val_cond_ops_acc = metrics.accuracy_score(np.concatenate(np.concatenate(out_all_cond_ops)),
-                                                      np.concatenate(np.concatenate(label_all_cond_ops)))
-            # todo 准确率计算逻辑
+            val_agg_acc = metrics.accuracy_score(np.concatenate(out_all_agg, axis=0),
+                                                 np.concatenate(label_all_agg, axis=0))
+            val_conn_op_acc = metrics.accuracy_score(np.concatenate(out_all_conn_op, axis=0),
+                                                     np.concatenate(label_all_conn_op, axis=0))
+            val_cond_ops_acc = metrics.accuracy_score(np.concatenate(out_all_cond_ops, axis=0),
+                                                      np.concatenate(label_all_cond_ops, axis=0))
+            # 准确率计算逻辑
             val_avg_acc = (val_agg_acc + val_conn_op_acc + val_cond_ops_acc) / 3
         if type(model) is ValueClassifierModel:
-            val_cond_vals_acc = metrics.accuracy_score(np.concatenate(out_all_cond_vals),
-                                                       np.concatenate(label_all_cond_vals))
+            val_cond_vals_acc = metrics.accuracy_score(np.concatenate(out_all_cond_vals, axis=0),
+                                                       np.concatenate(label_all_cond_vals, axis=0))
             val_avg_acc = val_cond_vals_acc
         # save model
         if val_avg_acc > best_val_avg_acc:
@@ -153,7 +140,7 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
             print(f'''best model | Val Accuracy: {best_val_avg_acc: .3f}''')
         print(
             f'''Epochs: {epoch + 1} 
-              | Train Loss: {total_loss_train: .3f} ]
+              | Train Loss: {total_loss_train.item(): .3f} 
               | Val Accuracy: {val_avg_acc: .3f}''')
 
 
@@ -208,9 +195,9 @@ if __name__ == '__main__':
     test_size = total_size - train_size - val_size
     # 分割数据集
     train_dataset, val_dataset, test_dataset = random_split(dateset, [train_size, val_size, test_size])
-    print('train column model begin')
-    train(col_model, save_column_model_path, train_dataset, val_dataset, batch_size, learn_rate, epochs)
-    print('train column model finish')
+    # print('train column model begin')
+    # train(col_model, save_column_model_path, train_dataset, val_dataset, batch_size, learn_rate, epochs)
+    # print('train column model finish')
     print('train value model begin')
     train(value_model, save_value_model_path, train_dataset, val_dataset, batch_size, learn_rate,
           epochs)

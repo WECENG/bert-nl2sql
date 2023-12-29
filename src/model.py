@@ -5,8 +5,12 @@ __Version__ = "1.0.0"
 __Description__ = "模型"
 __Created__ = 2023/12/14 14:50
 """
+import numpy as np
+import torch
 from torch import nn
 from transformers import BertModel
+
+from utils import get_cond_op_dict
 
 
 class ColClassifierModel(nn.Module):
@@ -50,7 +54,8 @@ class ValueClassifierModel(nn.Module):
         self.cond_vals_classifier = nn.Linear(hidden_size, cond_value_length)
         self.question_length = question_length
 
-    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None):
+    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, cond_ops=None, cond_vals=None,
+                device='cpu'):
         # 输出最后一层隐藏状态以及池化层
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask,
                             token_type_ids=token_type_ids)
@@ -60,5 +65,24 @@ class ValueClassifierModel(nn.Module):
         cond_values = dropout_hidden_state[:, 1:int(self.question_length), :]
 
         out_cond_vals = self.cond_vals_classifier(cond_values)
+
+        # cond_ops中不为'none'操作的数量
+        cond_counts = np.count_nonzero(cond_ops != get_cond_op_dict()['none'], axis=1)
+
+        # 按照cond_ops中对应的数量n提取出out_cond_vals前n个最大值
+        valid_cond_vals = [torch.topk(out_cond_vals[i], k=cond_counts[i], dim=0, largest=True).indices for i in
+                           range(len(out_cond_vals))]
+        # 按照label_cond_vals中不为[0,0]的元素位置进行填充
+        cond_vals_filled = []
+        for cond_val, valid_cond_val in zip(cond_vals, valid_cond_vals):
+            cond_idx = 0
+            cond_val_fill = torch.zeros((len(cond_val), 2), dtype=torch.float, device=device)
+            # 使用 enumerate 获取索引和值
+            for i, cond_item in enumerate(cond_val):
+                if not torch.equal(cond_item, torch.zeros((2,), dtype=torch.float, device=device)):
+                    cond_val_fill[i] = valid_cond_val[cond_idx]
+                    cond_idx += 1
+            cond_vals_filled.append(cond_val_fill)
+        out_cond_vals = torch.stack(cond_vals_filled, dim=0).to(dtype=torch.float)
 
         return out_cond_vals
