@@ -63,8 +63,7 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
             if type(model) is ValueClassifierModel:
                 label_cond_vals = label_cond_vals.to(dtype=torch.float, device=device)
                 # 模型输出
-                out_cond_vals = model(input_ids, attention_mask, token_type_ids, label_cond_ops, label_cond_vals,
-                                      device)
+                out_cond_vals = model(input_ids, attention_mask, token_type_ids, label_cond_ops, device)
                 # 计算损失
                 label_cond_vals = label_cond_vals.reshape(-1)
                 out_cond_vals = out_cond_vals.reshape(-1)
@@ -112,8 +111,7 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
                 if type(model) is ValueClassifierModel:
                     label_cond_vals = label_cond_vals.to(dtype=torch.float, device=device)
                     # 模型输出
-                    out_cond_vals = model(input_ids, attention_mask, token_type_ids, label_cond_ops, label_cond_vals,
-                                          device)
+                    out_cond_vals = model(input_ids, attention_mask, token_type_ids, label_cond_ops, device)
                     out_cond_vals = out_cond_vals.reshape(-1)
                     # reshape(-1)需要转成一维数组才能计算准确率
                     label_cond_vals = label_cond_vals.reshape(-1)
@@ -142,29 +140,6 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
             f'''Epochs: {epoch + 1} 
               | Train Loss: {total_loss_train.item(): .3f} 
               | Val Accuracy: {val_avg_acc: .3f}''')
-
-
-def test(model, model_save_path, test_dataset, batch_size):
-    # 加载最佳模型权重
-    model.load_state_dict(torch.load(model_save_path))
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size)
-    use_cuda = torch.cuda.is_available()
-    device = torch.device("cuda:0" if use_cuda else "cpu")
-
-    if use_cuda:
-        model = model.to(device)
-
-    total_acc_test = 0
-    model.eval()
-    with torch.no_grad():
-        for test_input, test_label in test_dataloader:
-            test_label = test_label.to(device)
-            attention_mask = test_input['attention_mask'].to(device)
-            input_ids = test_input['input_ids'].squeeze(1).to(device)
-            output = model(input_ids, attention_mask)
-            acc = (output.argmax(dim=1) == test_label).sum().item()
-            total_acc_test += acc
-    print(f'Test Accuracy: {total_acc_test / len(test_dataset): .3f}')
 
 
 if __name__ == '__main__':

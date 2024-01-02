@@ -54,7 +54,7 @@ class ValueClassifierModel(nn.Module):
         self.cond_vals_classifier = nn.Linear(hidden_size, cond_value_length)
         self.question_length = question_length
 
-    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, cond_ops=None, cond_vals=None,
+    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, cond_ops=None,
                 device='cpu'):
         # 输出最后一层隐藏状态以及池化层
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask,
@@ -74,12 +74,12 @@ class ValueClassifierModel(nn.Module):
                            range(len(out_cond_vals))]
         # 按照label_cond_vals中不为[0,0]的元素位置进行填充
         cond_vals_filled = []
-        for cond_val, valid_cond_val in zip(cond_vals, valid_cond_vals):
+        for cond_op, valid_cond_val in zip(cond_ops, valid_cond_vals):
             cond_idx = 0
-            cond_val_fill = torch.zeros((len(cond_val), 2), dtype=torch.float, device=device)
+            cond_val_fill = torch.zeros((len(cond_op), 2), dtype=torch.float, device=device)
             # 使用 enumerate 获取索引和值
-            for i, cond_item in enumerate(cond_val):
-                if not torch.equal(cond_item, torch.zeros((2,), dtype=torch.float, device=device)):
+            for i, cond_item in enumerate(cond_op):
+                if not cond_item == get_cond_op_dict()['none']:
                     cond_val_fill[i] = valid_cond_val[cond_idx]
                     cond_idx += 1
             cond_vals_filled.append(cond_val_fill)

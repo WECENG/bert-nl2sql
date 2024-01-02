@@ -33,7 +33,7 @@ def read_train_datas(path):
             conn_op = item['sql']['cond_conn_op']
             # cond_ops & cond_vals
             cond_ops = [get_cond_op_dict()['none']] * column_length
-            cond_vals = [torch.zeros((2, ), dtype=torch.int)] * column_length
+            cond_vals = [torch.zeros((2,), dtype=torch.int)] * column_length
             if item['sql'].get('conds') is not None:
                 conds = item['sql']['conds']
                 for i, cond in enumerate(conds):
@@ -103,12 +103,9 @@ def get_agg_dict():
     return agg_dict
 
 
-def get_values_by_idx(question, value1, value2, conn):
-    question_fill = question.ljust(63)
-    real_value1 = ''
-    real_value2 = ''
-    if value1[0] < value1[1]:
-        real_value1 = question_fill[value1[0]:value1[1] + 1]
-    if conn != get_conn_op_dict()['none'] and value1[1] < value2[0] < value2[1]:
-        real_value2 = question_fill[value2[0]:value2[1] + 1]
-    return real_value1.strip(), real_value2.strip()
+def get_values_by_idx(question, start_idx, end_idx, conn):
+    question_fill = str(question).ljust(63)
+    real_value = None
+    if len(question_fill) >= int(end_idx) > int(start_idx) >= 0 and conn != get_conn_op_dict()['none']:
+        real_value = question_fill[int(start_idx):int(end_idx) + 1]
+    return real_value
