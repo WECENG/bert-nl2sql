@@ -71,13 +71,16 @@ def predict(questions, predict_result_path, pretrain_model_path, column_model_pa
                                                                pre_all_cond_ops, pre_all_cond_vals):
             sel_col = np.where(np.array(agg) != get_agg_dict()['none'])[0]
             agg = agg[agg != get_agg_dict()['none']]
+            cond_col = np.where(np.array(cond_ops) != get_cond_op_dict()['none'])[0]
+            cond_op = cond_ops[cond_ops != get_cond_op_dict()['none']]
             sel_col_name = [get_columns()[idx_col] for idx_col in sel_col]
             cond_vals_name = [result
                               for value_idx_start, value_idx_end in cond_vals
                               if (result := get_values_by_idx(question, value_idx_start.item(),
                                                               value_idx_end.item(),
                                                               conn_op)) is not None]
-            conds = [[int(cond_op), int(conn_op), cond_val_name] for cond_op, cond_val_name in zip(cond_ops, cond_vals_name)]
+            conds = [[int(item_cond_col), int(item_cond_op), item_cond_val_name] for
+                     item_cond_col, item_cond_op, item_cond_val_name in zip(cond_col, cond_op, cond_vals_name)]
             sql_dict = {"question": question, "table_id": table_name,
                         "sql": {"sel": list(map(int, sel_col)),
                                 "agg": list(map(int, agg)),

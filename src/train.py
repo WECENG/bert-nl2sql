@@ -65,8 +65,8 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
                 # 模型输出
                 out_cond_vals = model(input_ids, attention_mask, token_type_ids, label_cond_ops, device)
                 # 计算损失
-                label_cond_vals = label_cond_vals.reshape(-1)
-                out_cond_vals = out_cond_vals.reshape(-1)
+                label_cond_vals = label_cond_vals.reshape(-1, label_cond_vals.size(2))
+                out_cond_vals = out_cond_vals.reshape(-1, out_cond_vals.size(2))
                 lost_cond_vals = criterion(out_cond_vals, label_cond_vals)
                 total_loss_train = lost_cond_vals.requires_grad_(True)
 
@@ -170,9 +170,9 @@ if __name__ == '__main__':
     test_size = total_size - train_size - val_size
     # 分割数据集
     train_dataset, val_dataset, test_dataset = random_split(dateset, [train_size, val_size, test_size])
-    # print('train column model begin')
-    # train(col_model, save_column_model_path, train_dataset, val_dataset, batch_size, learn_rate, epochs)
-    # print('train column model finish')
+    print('train column model begin')
+    train(col_model, save_column_model_path, train_dataset, val_dataset, batch_size, learn_rate, epochs)
+    print('train column model finish')
     print('train value model begin')
     train(value_model, save_value_model_path, train_dataset, val_dataset, batch_size, learn_rate,
           epochs)

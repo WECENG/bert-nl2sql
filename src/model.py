@@ -54,35 +54,26 @@ class ValueClassifierModel(nn.Module):
         self.cond_vals_classifier = nn.Linear(hidden_size, cond_value_length)
         self.question_length = question_length
 
-    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, cond_ops=None,
-                device='cpu'):
-        # 输出最后一层隐藏状态以及池化层
-        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask,
-                            token_type_ids=token_type_ids)
-        dropout_hidden_state = self.dropout(outputs.last_hidden_state)
+    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, cond_ops=None, device='cpu'):
+        # 输出最后一层隐藏状态
+        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
+        hidden_state = outputs.last_hidden_state
 
         # 提取问题特征信息
-        cond_values = dropout_hidden_state[:, 1:int(self.question_length), :]
+        cond_values = hidden_state[:, 1:int(self.question_length), :]
 
         out_cond_vals = self.cond_vals_classifier(cond_values)
 
-        # cond_ops中不为'none'操作的数量
-        cond_counts = np.count_nonzero(cond_ops != get_cond_op_dict()['none'], axis=1)
+        # 提取有效的条件值
+        valid_cond_vals = [
+            torch.topk(out_cond_vals[i], k=np.count_nonzero(cond_op != get_cond_op_dict()['none']), dim=0,
+                       largest=True).indices for i, cond_op in enumerate(cond_ops)]
 
-        # 按照cond_ops中对应的数量n提取出out_cond_vals前n个最大值
-        valid_cond_vals = [torch.topk(out_cond_vals[i], k=cond_counts[i], dim=0, largest=True).indices for i in
-                           range(len(out_cond_vals))]
-        # 按照label_cond_vals中不为[0,0]的元素位置进行填充
-        cond_vals_filled = []
-        for cond_op, valid_cond_val in zip(cond_ops, valid_cond_vals):
-            cond_idx = 0
-            cond_val_fill = torch.zeros((len(cond_op), 2), dtype=torch.float, device=device)
-            # 使用 enumerate 获取索引和值
-            for i, cond_item in enumerate(cond_op):
-                if not cond_item == get_cond_op_dict()['none']:
-                    cond_val_fill[i] = valid_cond_val[cond_idx]
-                    cond_idx += 1
-            cond_vals_filled.append(cond_val_fill)
-        out_cond_vals = torch.stack(cond_vals_filled, dim=0).to(dtype=torch.float)
+        # 使用条件值填充
+        cond_vals_filled = torch.zeros((len(cond_ops), len(cond_ops[0]), 2), dtype=torch.float, device=device)
+        for i, (cond_op, valid_cond_val) in enumerate(zip(cond_ops, valid_cond_vals)):
+            valid_cond_val = valid_cond_val.to(dtype=torch.float, device=device)
+            cond_vals_filled[i, cond_op != get_cond_op_dict()['none'], :] = valid_cond_val
+        out_cond_vals = cond_vals_filled
 
         return out_cond_vals
