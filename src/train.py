@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from datasets import Dataset, InputFeatures
 from model import ColClassifierModel, ValueClassifierModel
-from utils import read_train_datas, get_conn_op_dict, get_cond_op_dict, get_agg_dict
+from utils import read_train_datas, get_agg_dict, get_conn_op_dict, get_cond_op_dict
 
 
 def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, train_dataset: Dataset,
@@ -27,7 +27,11 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if use_cuda else "cpu")
     # 定义损失函数和优化器
-    criterion = nn.CrossEntropyLoss()
+    criterion = None
+    if type(model) is ColClassifierModel:
+        criterion = nn.CrossEntropyLoss()
+    if type(model) is ValueClassifierModel:
+        criterion = nn.L1Loss()
     optim = Adam(model.parameters(), lr=lr)
     if use_cuda:
         model = model.to(device)
@@ -63,12 +67,12 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
             if type(model) is ValueClassifierModel:
                 label_cond_vals = label_cond_vals.to(dtype=torch.float, device=device)
                 # 模型输出
-                out_cond_vals = model(input_ids, attention_mask, token_type_ids, label_cond_ops, device)
+                out_cond_vals = model(input_ids, attention_mask, token_type_ids, cls_idx)
                 # 计算损失
-                label_cond_vals = label_cond_vals.reshape(-1, label_cond_vals.size(2))
-                out_cond_vals = out_cond_vals.reshape(-1, out_cond_vals.size(2))
+                label_cond_vals = label_cond_vals.reshape(label_cond_vals.size(0), -1)
+                out_cond_vals = out_cond_vals.reshape(out_cond_vals.size(0), -1)
                 lost_cond_vals = criterion(out_cond_vals, label_cond_vals)
-                total_loss_train = lost_cond_vals.requires_grad_(True)
+                total_loss_train = lost_cond_vals
 
             # 模型更新
             model.zero_grad()
@@ -111,10 +115,9 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
                 if type(model) is ValueClassifierModel:
                     label_cond_vals = label_cond_vals.to(dtype=torch.float, device=device)
                     # 模型输出
-                    out_cond_vals = model(input_ids, attention_mask, token_type_ids, label_cond_ops, device)
-                    out_cond_vals = out_cond_vals.reshape(-1)
-                    # reshape(-1)需要转成一维数组才能计算准确率
-                    label_cond_vals = label_cond_vals.reshape(-1)
+                    out_cond_vals = model(input_ids, attention_mask, token_type_ids, cls_idx)
+                    label_cond_vals = label_cond_vals.reshape(label_cond_vals.size(0), -1)
+                    out_cond_vals = out_cond_vals.reshape(out_cond_vals.size(0), -1)
                     out_all_cond_vals.append(out_cond_vals.cpu().numpy())
                     label_all_cond_vals.append(label_cond_vals.cpu().numpy())
 
@@ -128,9 +131,10 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
             # 准确率计算逻辑
             val_avg_acc = (val_agg_acc + val_conn_op_acc + val_cond_ops_acc) / 3
         if type(model) is ValueClassifierModel:
-            val_cond_vals_acc = metrics.accuracy_score(np.concatenate(out_all_cond_vals, axis=0),
-                                                       np.concatenate(label_all_cond_vals, axis=0))
-            val_avg_acc = val_cond_vals_acc
+            mae = metrics.mean_absolute_error(np.concatenate(out_all_cond_vals, axis=0),
+                                              np.concatenate(label_all_cond_vals, axis=0))
+
+            val_avg_acc = 1 - mae
         # save model
         if val_avg_acc > best_val_avg_acc:
             best_val_avg_acc = val_avg_acc
@@ -146,7 +150,7 @@ if __name__ == '__main__':
     hidden_size = 768
     batch_size = 24
     learn_rate = 1e-5
-    epochs = 5
+    epochs = 1
     question_length = 128
     max_length = 512
     train_data_path = '../train-datas/waic_nl2sql_train.jsonl'
@@ -156,24 +160,34 @@ if __name__ == '__main__':
     # 加载数据
     label_datas = read_train_datas(train_data_path)
     # 提取特征数据
-    list_input_features = InputFeatures(pretrain_model_path, question_length, max_length).list_features(label_datas)
+    col_model_features = InputFeatures(pretrain_model_path, question_length, max_length).list_features(label_datas)
     # 初始化dataset
-    dateset = Dataset(list_input_features)
+    col_model_dateset = Dataset(col_model_features)
     # 创建模型
     col_model = ColClassifierModel(pretrain_model_path, hidden_size, len(get_agg_dict()), len(get_conn_op_dict()),
                                    len(get_cond_op_dict()))
-    value_model = ValueClassifierModel(pretrain_model_path, hidden_size, question_length)
     # 分割数据集
     total_size = len(label_datas)
     train_size = int(0.001 * total_size)
     val_size = int(0.001 * total_size)
     test_size = total_size - train_size - val_size
     # 分割数据集
-    train_dataset, val_dataset, test_dataset = random_split(dateset, [train_size, val_size, test_size])
+    col_model_train_dataset, col_model_val_dataset, col_model_test_dataset = random_split(col_model_dateset,
+                                                                                          [train_size, val_size,
+                                                                                           test_size])
     print('train column model begin')
-    train(col_model, save_column_model_path, train_dataset, val_dataset, batch_size, learn_rate, epochs)
+    train(col_model, save_column_model_path, col_model_train_dataset, col_model_val_dataset, batch_size, learn_rate,
+          epochs)
     print('train column model finish')
+    value_model_features = InputFeatures(pretrain_model_path, question_length, max_length).list_features(label_datas,
+                                                                                                         True)
+    value_model_dateset = Dataset(value_model_features)
+    value_model = ValueClassifierModel(pretrain_model_path, hidden_size, question_length)
+    value_model_train_dataset, value_model_val_dataset, value_model_test_dataset = random_split(value_model_dateset,
+                                                                                                [train_size, val_size,
+                                                                                                 test_size])
     print('train value model begin')
-    train(value_model, save_value_model_path, train_dataset, val_dataset, batch_size, learn_rate,
+    train(value_model, save_value_model_path, value_model_train_dataset, value_model_val_dataset, batch_size,
+          learn_rate,
           epochs)
     print('train value model finish')

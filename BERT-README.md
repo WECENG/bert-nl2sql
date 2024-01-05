@@ -281,7 +281,7 @@ def test(model, model_save_path, test_dataset, batch_size):
 
 ## Q&A
 
-- **Q **：训练停滞（训练无法持续优化模型）
+- **Q **：**训练停滞（训练无法持续优化模型）**
   **A**：问题可能出在数据加载、模型初始化、学习率、过拟合、训练过程中的验证等方面。以下是一些建议：
 
   1. **数据加载**：确保数据加载正确，并且在训练过程中确实抽取了不同的批次。你可以打印一些关于批次的信息来验证这一点。
@@ -292,7 +292,7 @@ def test(model, model_save_path, test_dataset, batch_size):
   6. **打印语句**：在训练循环中添加打印语句，以打印损失、准确性和其他相关信息的值。这有助于确定问题发生在何处。
      解决方案：调低lr
 
-- **Q**：BERT的输出是什么
+- **Q**：**BERT的输出是什么**
 
 - **A**：在使用预训练的 Transformer 模型（比如BERT）进行自然语言处理任务时，模型的隐藏状态和池化是两个重要的概念。
 
@@ -308,6 +308,95 @@ def test(model, model_save_path, test_dataset, batch_size):
 
      在BERT中，通常使用的是池化操作得到的 `pooled_output`。这个操作通常是对整个序列的隐藏状态进行池化，生成一个长度固定的向量，代表整个序列的信息。在文本分类任务中，这个向量可以被用作输入序列的表示，供分类器进行分类。
 
-     
+- **Q**：**回归模型判断准确率的方法，说明其取值范围及其特性，及如何判读准确率高，及pytorch或numpy对应的方法**
+
+- **A**：在回归问题中，通常使用一些指标来评估模型的性能。以下是常用的回归模型评估指标及其特性：
+
+  1. **均方误差 (Mean Squared Error, MSE):**
+     - **取值范围：** 0 到正无穷，值越小越好。
+     - **特性：** 对异常值敏感，平方惩罚使得大误差的样本对结果的影响更大。
+     - **判读准确率高：** 较小的 MSE 表示模型对数据拟合较好。
+  2. **平均绝对误差 (Mean Absolute Error, MAE):**
+     - **取值范围：** 0 到正无穷，值越小越好。
+     - **特性：** 对异常值不敏感，更加关注误差的绝对值。
+     - **判读准确率高：** 较小的 MAE 表示模型对数据拟合较好。
+  3. **R 平方 (Coefficient of Determination, �2\*R\*2):**
+     - **取值范围：** −∞−∞ 到 1，值越接近 1 越好。
+     - **特性：** 衡量模型解释方差的能力，1 表示模型完美拟合数据，0 表示模型与简单平均相当，负值表示模型拟合效果差。
+     - **判读准确率高：** 较大的 �2*R*2 表示模型对数据的解释能力较强。
+  4. **Huber 损失:**
+     - **取值范围：** 0 到正无穷，值越小越好。
+     - **特性：** 综合了均方误差和平均绝对误差，对异常值具有一定的鲁棒性。
+     - **判读准确率高：** 较小的 Huber 损失表示模型对数据拟合较好。
+  5. **可解释方差得分 (Explained Variance Score):**
+     - **取值范围：** 0 到 1，值越接近 1 越好。
+     - **特性：** 衡量模型解释方差的百分比，1 表示模型完美拟合数据。
+     - **判读准确率高：** 较大的可解释方差得分表示模型对数据的解释能力较强。
+
+  在 PyTorch 或 NumPy 中，你可以使用相应的库函数来计算这些指标，例如：
+
+  ```python
+  import torch
+  from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, explained_variance_score
+  
+  # 示例数据
+  predictions = torch.tensor([1.0, 2.0, 3.0])
+  targets = torch.tensor([0.8, 2.2, 3.2])
+  
+  # 计算指标
+  mse = mean_squared_error(predictions, targets)
+  mae = mean_absolute_error(predictions, targets)
+  r2 = r2_score(predictions, targets)
+  explained_variance = explained_variance_score(predictions, targets)
+  ```
+
+  选择适当的指标取决于任务的具体需求和数据特点。
+
+- **Q**：**分类模型判断准确率的方法，说明其取值范围及其特性，及如何判读准确率高，及pytorch或numpy对应的方法**
+
+- **A**：在分类任务中，准确率是一种常见的性能指标，它表示正确分类的样本数占总样本数的比例。以下是有关分类准确率的一些信息：
+
+  **准确率的计算：** 准确率（Accuracy）的计算公式是：
+
+  Accuracy=Number of Correct PredictionsTotal Number of PredictionsAccuracy=Total Number of PredictionsNumber of Correct Predictions
+
+  **取值范围：** 准确率的取值范围是 0 到 1，其中 1 表示完全准确，0 表示完全错误。
+
+  **特性和解释：**
+
+  - 准确率是最直观的分类性能度量之一。
+  - 适用于平衡类别分布的任务。
+  - 可能受到类别不平衡的影响，当类别分布不均匀时，高准确率并不总是表示好的模型性能。
+
+  **如何判断准确率高：**
+
+  - 较高的准确率通常表示模型在任务上表现良好。但要谨慎，特别是在类别不平衡的情况下，需要综合考虑其他性能指标。
+  - 对于平衡类别的问题，高准确率可能是一个好的指标。
+
+  **在 PyTorch 中计算准确率：**
+
+  ```python
+  import torch
+  from sklearn.metrics import accuracy_score
+  
+  # 假设 predictions 是模型的预测结果，labels 是真实标签
+  predictions = torch.tensor([1, 0, 1, 1, 0])
+  labels = torch.tensor([1, 0, 1, 0, 1])
+  
+  # 将 PyTorch 张量转换为 NumPy 数组，然后使用 sklearn 提供的 accuracy_score 计算准确率
+  accuracy = accuracy_score(predictions.numpy(), labels.numpy())
+  
+  print(f'Accuracy: {accuracy}')
+  ```
+
+  在上述代码中，`predictions` 是模型的预测结果，`labels` 是真实标签。首先，将 PyTorch 张量转换为 NumPy 数组，然后使用 `accuracy_score` 函数计算准确率。在实际使用中，你需要替换 `predictions` 和 `labels` 为你模型的输出和真实标签。
+
+- 
+
+- 
+
+- 
+
+  
 
   

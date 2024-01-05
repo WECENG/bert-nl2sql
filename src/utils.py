@@ -103,9 +103,19 @@ def get_agg_dict():
     return agg_dict
 
 
-def get_values_by_idx(question, start_idx, end_idx, conn):
+def get_key(dict, value):
+    """
+    根据字典的value获取key
+    :param dict: 字典
+    :param value: 值
+    :return: key
+    """
+    return [k for k, v in dict.items() if v == value]
+
+
+def get_values_by_idx(question, start_idx, end_idx):
     question_fill = str(question).ljust(63)
     real_value = None
-    if len(question_fill) >= int(end_idx) > int(start_idx) >= 0 and conn != get_conn_op_dict()['none']:
+    if len(question_fill) >= int(end_idx) > int(start_idx) >= 0:
         real_value = question_fill[int(start_idx):int(end_idx) + 1]
     return real_value

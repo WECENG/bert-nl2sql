@@ -5,12 +5,8 @@ __Version__ = "1.0.0"
 __Description__ = "模型"
 __Created__ = 2023/12/14 14:50
 """
-import numpy as np
-import torch
 from torch import nn
 from transformers import BertModel
-
-from utils import get_cond_op_dict
 
 
 class ColClassifierModel(nn.Module):
@@ -54,26 +50,14 @@ class ValueClassifierModel(nn.Module):
         self.cond_vals_classifier = nn.Linear(hidden_size, cond_value_length)
         self.question_length = question_length
 
-    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, cond_ops=None, device='cpu'):
+    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, cls_idx=None):
         # 输出最后一层隐藏状态
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
         hidden_state = outputs.last_hidden_state
 
         # 提取问题特征信息
-        cond_values = hidden_state[:, 1:int(self.question_length), :]
+        cond_values = hidden_state[:, cls_idx[0], :]
 
         out_cond_vals = self.cond_vals_classifier(cond_values)
-
-        # 提取有效的条件值
-        valid_cond_vals = [
-            torch.topk(out_cond_vals[i], k=np.count_nonzero(cond_op != get_cond_op_dict()['none']), dim=0,
-                       largest=True).indices for i, cond_op in enumerate(cond_ops)]
-
-        # 使用条件值填充
-        cond_vals_filled = torch.zeros((len(cond_ops), len(cond_ops[0]), 2), dtype=torch.float, device=device)
-        for i, (cond_op, valid_cond_val) in enumerate(zip(cond_ops, valid_cond_vals)):
-            valid_cond_val = valid_cond_val.to(dtype=torch.float, device=device)
-            cond_vals_filled[i, cond_op != get_cond_op_dict()['none'], :] = valid_cond_val
-        out_cond_vals = cond_vals_filled
 
         return out_cond_vals
