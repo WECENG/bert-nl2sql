@@ -112,6 +112,22 @@ def get_key(dict, value):
     return [k for k, v in dict.items() if v == value]
 
 
+def count_values(cond_vals):
+    """
+   cond_vals的值如[0,1,1,1,1,0,0,0,1,1,1,0,0,0]所示
+   统计出现1的数量，续的1只统计一次
+   """
+    count = 0
+    pre = 0
+    for idx, val in enumerate(cond_vals):
+        if val == 1 and pre == 0:
+            count = count + 1
+            pre = 1
+        else:
+            pre = 0
+    return count
+
+
 def get_values_name(question, cond_vals):
     """
     cond_vals的值如[0,1,1,1,1,0,0,0,1,1,1,0,0,0]所示

@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from datasets import Dataset, InputFeatures
 from model import ColClassifierModel, ValueClassifierModel
-from utils import read_train_datas, get_agg_dict, get_conn_op_dict, get_cond_op_dict
+from utils import read_train_datas, get_agg_dict, get_conn_op_dict, get_cond_op_dict, count_values
 
 
 def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, train_dataset: Dataset,
@@ -80,10 +80,12 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
         out_all_conn_op = []
         out_all_cond_ops = []
         out_all_cond_vals = []
+        out_all_count_cond_vals = []
         label_all_agg = []
         label_all_conn_op = []
         label_all_cond_ops = []
         label_all_cond_vals = []
+        label_all_count_cond_vals = []
         # 验证无需梯度计算
         model.eval()
         with torch.no_grad():
@@ -108,12 +110,18 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
                     label_all_conn_op.append(label_conn_op.cpu().numpy())
                     label_all_cond_ops.append(label_cond_ops.cpu().numpy())
                 if type(model) is ValueClassifierModel:
-                    label_cond_vals = label_cond_vals.to(device).reshape(-1)
+                    label_cond_vals = label_cond_vals.to(device)
+                    label_count_value = [count_values(label_cond_val) for label_cond_val in label_cond_vals]
+                    label_cond_vals = label_cond_vals.reshape(-1)
                     # 模型输出
                     out_cond_vals = model(input_ids, attention_mask, token_type_ids)
-                    out_cond_vals = out_cond_vals.argmax(dim=2).to(device).reshape(-1)
+                    out_cond_vals = out_cond_vals.argmax(dim=2).to(device)
+                    out_count_value = [count_values(out_cond_val) for out_cond_val in out_cond_vals]
+                    out_cond_vals = out_cond_vals.reshape(-1)
                     out_all_cond_vals.append(out_cond_vals.cpu().numpy())
                     label_all_cond_vals.append(label_cond_vals.cpu().numpy())
+                    out_all_count_cond_vals.extend(out_count_value)
+                    label_all_count_cond_vals.extend(label_count_value)
 
         if type(model) is ColClassifierModel:
             val_agg_acc = metrics.accuracy_score(np.concatenate(out_all_agg, axis=0),
@@ -127,8 +135,8 @@ def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, tr
         if type(model) is ValueClassifierModel:
             val_cond_vals_acc = metrics.accuracy_score(np.concatenate(out_all_cond_vals, axis=0),
                                                        np.concatenate(label_all_cond_vals, axis=0))
-
-            val_avg_acc = val_cond_vals_acc
+            val_count_cond_vals_acc = metrics.accuracy_score(label_all_count_cond_vals, out_all_count_cond_vals)
+            val_avg_acc = val_cond_vals_acc * 0.1 + val_count_cond_vals_acc * 0.9
         # save model
         if val_avg_acc > best_val_avg_acc:
             best_val_avg_acc = val_avg_acc
@@ -154,33 +162,28 @@ if __name__ == '__main__':
     # 加载数据
     label_datas = read_train_datas(train_data_path, question_length)
     # 提取特征数据
-    col_model_features = InputFeatures(pretrain_model_path, question_length, max_length).list_features(label_datas)
+    model_features = InputFeatures(pretrain_model_path, question_length, max_length).list_features(label_datas)
     # 初始化dataset
-    col_model_dateset = Dataset(col_model_features)
+    model_dateset = Dataset(model_features)
     # 创建模型
     col_model = ColClassifierModel(pretrain_model_path, hidden_size, len(get_agg_dict()), len(get_conn_op_dict()),
                                    len(get_cond_op_dict()))
     # 分割数据集
     total_size = len(label_datas)
-    train_size = int(0.001 * total_size)
-    val_size = int(0.001 * total_size)
+    train_size = int(0.1 * total_size)
+    val_size = int(0.1 * total_size)
     test_size = total_size - train_size - val_size
     # 分割数据集
-    col_model_train_dataset, col_model_val_dataset, col_model_test_dataset = random_split(col_model_dateset,
-                                                                                          [train_size, val_size,
-                                                                                           test_size])
+    model_train_dataset, model_val_dataset, model_test_dataset = random_split(model_dateset,
+                                                                              [train_size, val_size,
+                                                                               test_size])
     print('train column model begin')
-    train(col_model, save_column_model_path, col_model_train_dataset, col_model_val_dataset, batch_size, learn_rate,
+    train(col_model, save_column_model_path, model_train_dataset, model_val_dataset, batch_size, learn_rate,
           epochs)
     print('train column model finish')
-    value_model_features = InputFeatures(pretrain_model_path, question_length, max_length).list_features(label_datas)
-    value_model_dateset = Dataset(value_model_features)
     value_model = ValueClassifierModel(pretrain_model_path, hidden_size, question_length)
-    value_model_train_dataset, value_model_val_dataset, value_model_test_dataset = random_split(value_model_dateset,
-                                                                                                [train_size, val_size,
-                                                                                                 test_size])
     print('train value model begin')
-    train(value_model, save_value_model_path, value_model_train_dataset, value_model_val_dataset, batch_size,
+    train(value_model, save_value_model_path, model_train_dataset, model_val_dataset, batch_size,
           learn_rate,
           epochs)
     print('train value model finish')
