@@ -50,13 +50,13 @@ class ValueClassifierModel(nn.Module):
         self.cond_vals_classifier = nn.Linear(hidden_size, cond_value_length)
         self.question_length = question_length
 
-    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, cls_idx=None):
+    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None):
         # 输出最后一层隐藏状态
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
         hidden_state = outputs.last_hidden_state
 
         # 提取问题特征信息
-        cond_values = hidden_state[:, cls_idx[0], :]
+        cond_values = hidden_state[:, 1:self.question_length + 1, :]
 
         out_cond_vals = self.cond_vals_classifier(cond_values)
 

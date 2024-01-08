@@ -7,11 +7,11 @@ __Created__ = 2023/12/18 16:37
 """
 import json
 
-import torch
 
-
-def read_train_datas(path):
+def read_train_datas(path, question_length):
     """
+    :param path 数据路径
+    :param question_length 问题长度
     :return: [[question, agg, conn_op, cond_ops, cond_vals],...], cond_vals:[[val_start_idx,val_end_idx],...]
     """
     column_length = len(get_columns())
@@ -33,7 +33,7 @@ def read_train_datas(path):
             conn_op = item['sql']['cond_conn_op']
             # cond_ops & cond_vals
             cond_ops = [get_cond_op_dict()['none']] * column_length
-            cond_vals = [torch.zeros((2,), dtype=torch.int)] * column_length
+            cond_vals = [0] * question_length
             if item['sql'].get('conds') is not None:
                 conds = item['sql']['conds']
                 for i, cond in enumerate(conds):
@@ -41,8 +41,7 @@ def read_train_datas(path):
                     cond_op_item = cond[1]
                     cond_ops[cond_col_item] = cond_op_item
                     value = cond[2]
-                    start, end = value_start_end(question, value)
-                    cond_vals[cond_col_item] = [start, end]
+                    cond_vals = fill_value_start_end(cond_vals, question, value)
             data_list.append([question, agg, conn_op, cond_ops, cond_vals])
     return data_list
 
@@ -61,16 +60,16 @@ def read_predict_datas(path):
     return questions
 
 
-def value_start_end(question, value):
+def fill_value_start_end(cond_vals, question, value):
     """
-    get the start and end index of the value in the question
+    fill [1] by the value in the question
     """
     question_length = len(question)
     value_length = len(value)
     for i in range(question_length - value_length + 1):
         if question[i:value_length + i] == value:
-            return i, i + value_length - 1
-    return 0, 0
+            cond_vals[i: value_length + i] = [1] * value_length
+    return cond_vals
 
 
 def get_columns():
@@ -113,9 +112,27 @@ def get_key(dict, value):
     return [k for k, v in dict.items() if v == value]
 
 
-def get_values_by_idx(question, start_idx, end_idx):
-    question_fill = str(question).ljust(63)
-    real_value = None
-    if len(question_fill) >= int(end_idx) > int(start_idx) >= 0:
-        real_value = question_fill[int(start_idx):int(end_idx) + 1]
-    return real_value
+def get_values_name(question, cond_vals):
+    """
+    cond_vals的值如[0,1,1,1,1,0,0,0,1,1,1,0,0,0]所示
+    根据cond_vals中为1的值找到question对应下标的内容
+    返回找到的内容列表，连续为1的内容作为返回列表的一个元素
+    """
+    question = question
+    result = []
+    cur_start_idx = 0
+    valid = False
+
+    for idx, val in enumerate(cond_vals):
+        if val == 1:
+            if not valid:
+                cur_start_idx = idx
+                valid = True
+        else:
+            if valid:
+                valid = False
+                if idx > cur_start_idx:
+                    vals = question[cur_start_idx:idx]
+                    result.append(vals)
+
+    return result

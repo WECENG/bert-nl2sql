@@ -98,11 +98,10 @@ class InputFeatures(object):
 
         return input_ids, attention_mask, token_type_ids
 
-    def list_features(self, datas, encode_cond_exp=False):
+    def list_features(self, datas):
         """
         输入特征
         :param datas: 数据
-        :param encode_cond_exp 是否编码条件表达式
         :return: 特征信息
         """
         list_features = []
@@ -115,13 +114,6 @@ class InputFeatures(object):
             label = None
             if len(data) > 1:
                 label = Label(label_agg=data[1], label_conn_op=data[2], label_cond_ops=data[3], label_cond_vals=data[4])
-                if encode_cond_exp:
-                    cond_expressions = [
-                        str(label_cond_op)
-                        for label_agg, label_cond_op in
-                        zip(label.label_agg, label.label_cond_ops)]
-                    cls_idx = self.get_cls_idx(cond_expressions)
-                    expressions_encode, expressions_segment_id = self.encode_expression(cond_expressions)
             # 编码(question+expressions)
             input_ids, attention_mask, token_type_ids = self.encode_question_with_expressions(self.question_length,
                                                                                               self.max_length,
