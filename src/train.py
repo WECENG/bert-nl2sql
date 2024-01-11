@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from datasets import Dataset, InputFeatures
 from model import ColClassifierModel, ValueClassifierModel
-from utils import read_train_datas, get_agg_dict, get_conn_op_dict, get_cond_op_dict, count_values
+from utils import read_train_datas, get_agg_dict, get_conn_op_dict, get_cond_op_dict, count_values, get_columns
 
 
 def train(model: ColClassifierModel or ValueClassifierModel, model_save_path, train_dataset: Dataset,
@@ -155,14 +155,17 @@ if __name__ == '__main__':
     epochs = 1
     question_length = 128
     max_length = 512
-    train_data_path = '../train-datas/waic_nl2sql_train.jsonl'
+    table_path = '../train-datas/table.xlsx'
+    train_data_path = '../train-datas/train.jsonl'
     pretrain_model_path = '../bert-base-chinese'
     save_column_model_path = '../result-model/classifier-column-model.pkl'
     save_value_model_path = '../result-model/classifier-value-model.pkl'
+    # 读取列
+    columns = get_columns(table_path)
     # 加载数据
-    label_datas = read_train_datas(train_data_path, question_length)
+    label_datas = read_train_datas(train_data_path, question_length, columns)
     # 提取特征数据
-    model_features = InputFeatures(pretrain_model_path, question_length, max_length).list_features(label_datas)
+    model_features = InputFeatures(pretrain_model_path, question_length, max_length).list_features(columns, label_datas)
     # 初始化dataset
     model_dateset = Dataset(model_features)
     # 创建模型

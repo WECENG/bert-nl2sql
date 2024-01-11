@@ -6,15 +6,17 @@ __Description__ = "工具包"
 __Created__ = 2023/12/18 16:37
 """
 import json
+import pandas as pd
 
 
-def read_train_datas(path, question_length):
+def read_train_datas(path, question_length, columns):
     """
     :param path 数据路径
     :param question_length 问题长度
+    :param columns 列
     :return: [[question, agg, conn_op, cond_ops, cond_vals],...], cond_vals:[[val_start_idx,val_end_idx],...]
     """
-    column_length = len(get_columns())
+    column_length = len(columns)
     with open(path, 'r', encoding='utf-8') as f:
         data_list = []
         for line in f:
@@ -72,19 +74,9 @@ def fill_value_start_end(cond_vals, question, value):
     return cond_vals
 
 
-def get_columns():
-    columns = ['基金代码', '基金名称', '成立时间', '基金类型', '基金规模', '销售状态', '是否可销售', '风险等级',
-               '基金公司名称', '分红方式',
-               '赎回状态', '是否支持定投', '净值同步日期', '净值', '成立以来涨跌幅', '昨日涨跌幅', '近一周涨跌幅',
-               '近一个月涨跌幅', '近三个月涨跌幅', '近六个月涨跌幅',
-               '近一年涨跌幅', '基金经理', '主题/概念', '一个月夏普率', '一年夏普率', '三个月夏普率', '六个月夏普率',
-               '成立以来夏普率', '投资市场', '板块', '行业',
-               '晨星三年评级', '管理费率', '销售服务费率', '托管费率', '认购费率', '申购费率', '赎回费率', '分红年度',
-               '权益登记日',
-               '除息日', '派息日', '红利再投日', '每十份收益单位派息', '主投资产类型', '基金投资风格描述', '估值',
-               '是否主动管理型基金', '投资', '跟踪指数',
-               '是否新发', '重仓', '无']
-    return columns
+def get_columns(table_path):
+    columns = pd.read_table(table_path, header=2)
+    return columns.columns.__array__()
 
 
 def get_cond_op_dict():

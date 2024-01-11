@@ -17,14 +17,14 @@ from model import ColClassifierModel, ValueClassifierModel
 from utils import get_cond_op_dict, read_predict_datas, get_conn_op_dict, get_columns, get_agg_dict, get_values_name
 
 
-def predict(questions, predict_result_path, pretrain_model_path, column_model_path, value_model_path, hidden_size,
-            batch_size, question_length, max_length, table_name='table_name'):
+def predict(columns, questions, predict_result_path, pretrain_model_path, column_model_path, value_model_path,
+            hidden_size, batch_size, question_length, max_length, table_name='table_name'):
     # 创建模型
     col_model = ColClassifierModel(pretrain_model_path, hidden_size, len(get_agg_dict()), len(get_conn_op_dict()),
                                    len(get_cond_op_dict()))
     value_model = ValueClassifierModel(pretrain_model_path, hidden_size, question_length)
     # 提取特征数据（不含label的数据）
-    input_features = InputFeatures(pretrain_model_path, question_length, max_length).list_features(questions)
+    input_features = InputFeatures(pretrain_model_path, question_length, max_length).list_features(columns, questions)
     dataset = Dataset(input_features)
     # 预测不用打乱顺序shuffle=False
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
@@ -70,7 +70,7 @@ def predict(questions, predict_result_path, pretrain_model_path, column_model_pa
             agg = agg[agg != get_agg_dict()['none']]
             cond_col = np.where(np.array(cond_ops) != get_cond_op_dict()['none'])[0]
             cond_op = cond_ops[cond_ops != get_cond_op_dict()['none']]
-            sel_col_name = [get_columns()[idx_col] for idx_col in sel_col]
+            sel_col_name = [columns[idx_col] for idx_col in sel_col]
             cond_vals_name = get_values_name(question[0], cond_vals)
             conds = [[int(item_cond_col), int(item_cond_op), item_cond_val_name] for
                      item_cond_col, item_cond_op, item_cond_val_name in zip(cond_col, cond_op, cond_vals_name)]
@@ -92,11 +92,13 @@ if __name__ == '__main__':
     batch_size = 24
     question_length = 128
     max_length = 512
-    predict_question_path = '../train-datas/waic_nl2sql_testa_public.jsonl'
+    table_path = '../train-datas/table.xlsx'
+    predict_question_path = '../train-datas/train_test.jsonl'
     predict_result_path = '../result-predict/predict.jsonl'
     pretrain_model_path = '../bert-base-chinese-hgd'
     column_model_path = '../result-model/classifier-column-model.pkl'
     value_model_path = '../result-model/classifier-value-model.pkl'
+    columns = get_columns(table_path)
     questions = read_predict_datas(predict_question_path)
-    predict(questions, predict_result_path, pretrain_model_path, column_model_path, value_model_path, hidden_size,
-            batch_size, question_length, max_length)
+    predict(columns, questions, predict_result_path, pretrain_model_path, column_model_path, value_model_path,
+            hidden_size, batch_size, question_length, max_length)

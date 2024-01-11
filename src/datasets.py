@@ -98,14 +98,14 @@ class InputFeatures(object):
 
         return input_ids, attention_mask, token_type_ids
 
-    def list_features(self, datas):
+    def list_features(self, columns, datas):
         """
         输入特征
+        :param columns 列
         :param datas: 数据
         :return: 特征信息
         """
         list_features = []
-        columns = get_columns()
         cls_idx = self.get_cls_idx(columns)
         expressions_encode, expressions_segment_id = self.encode_expression(columns)
         for data in datas:
