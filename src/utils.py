@@ -38,12 +38,12 @@ def read_train_datas(path, question_length, columns):
             cond_vals = [0] * question_length
             if item['sql'].get('conds') is not None:
                 conds = item['sql']['conds']
-                for i, cond in enumerate(conds):
+                for idx, cond in enumerate(conds):
                     cond_col_item = cond[0]
                     cond_op_item = cond[1]
                     cond_ops[cond_col_item] = cond_op_item
                     value = cond[2]
-                    cond_vals = fill_value_start_end(cond_vals, question, value)
+                    cond_vals = fill_value_start_end(cond_vals, question, value, idx)
             data_list.append([question, agg, conn_op, cond_ops, cond_vals])
     return data_list
 
@@ -62,25 +62,13 @@ def read_predict_datas(path):
     return questions
 
 
-def fill_value_start_end(cond_vals, question, value):
-    """
-    fill [1] by the value in the question
-    """
-    question_length = len(question)
-    value_length = len(value)
-    for i in range(question_length - value_length + 1):
-        if question[i:value_length + i] == value:
-            cond_vals[i: value_length + i] = [1] * value_length
-    return cond_vals
-
-
 def get_columns(table_path):
     columns = pd.read_table(table_path, header=2)
     return columns.columns.__array__()
 
 
 def get_cond_op_dict():
-    cond_op_dict = {'>': 0, '<': 1, '==': 2, '!=': 3, 'like': 4, '>=': 5, '<=': 6, 'none': 7}
+    cond_op_dict = {'>': 0, '<': 1, '==': 2, '!=': 3, 'like': 4, '>=': 5, '<=': 6, 'between_and': 7, 'in': 8, 'none': 9}
     return cond_op_dict
 
 
@@ -104,43 +92,54 @@ def get_key(dict, value):
     return [k for k, v in dict.items() if v == value]
 
 
+def fill_value_start_end(cond_vals, question, value, idx):
+    """
+    :param cond_vals 待填充待值
+    :param question 问题
+    :param value 待匹配待值
+    :param 下标
+    fill [1] by the value in the question
+    结果类似[0,0,0,0,1,1,1,1,0,0,0,2,2,2,2,3,3,3,0,0,0,4,4,4,0,0,0,0,0]
+    """
+    question_length = len(question)
+    value_length = len(value)
+    for i in range(question_length - value_length + 1):
+        if question[i:value_length + i] == value:
+            cond_vals[i: value_length + i] = [idx + 1] * value_length
+    return cond_vals
+
+
 def count_values(cond_vals):
     """
-   cond_vals的值如[0,1,1,1,1,0,0,0,1,1,1,0,0,0]所示
-   统计出现1的数量，续的1只统计一次
+   cond_vals的值如[0,0,0,0,1,1,1,1,0,0,0,2,2,2,2,3,3,3,0,0,0,4,4,4,0,0,0,0,0]所示
+   统计出现>0的数量，连续的>0只统计一次
    """
     count = 0
-    pre = 0
+    pre_value = None
     for idx, val in enumerate(cond_vals):
-        if val == 1 and pre == 0:
+        if idx > 0:
+            pre_value = cond_vals[idx - 1]
+        if val > 0 and val != pre_value:
             count = count + 1
-            pre = 1
-        else:
-            pre = 0
     return count
 
 
 def get_values_name(question, cond_vals):
     """
-    cond_vals的值如[0,1,1,1,1,0,0,0,1,1,1,0,0,0]所示
+    cond_vals的值如[0,0,0,0,1,1,1,1,0,0,0,2,2,2,2,3,3,3,0,0,0,4,4,4,0,0,0,0,0]所示
     根据cond_vals中为1的值找到question对应下标的内容
     返回找到的内容列表，连续为1的内容作为返回列表的一个元素
     """
-    question = question
     result = []
-    cur_start_idx = 0
-    valid = False
-
-    for idx, val in enumerate(cond_vals):
-        if val == 1:
-            if not valid:
-                cur_start_idx = idx
-                valid = True
-        else:
-            if valid:
-                valid = False
-                if idx > cur_start_idx:
-                    vals = question[cur_start_idx:idx]
-                    result.append(vals)
-
+    start_of_segment = None
+    for idx, current_value in enumerate(cond_vals):
+        previous_value = cond_vals[idx - 1] if idx > 0 else None
+        # 检测新的连续段的开始
+        if current_value > 0 and current_value != previous_value and start_of_segment is None:
+            start_of_segment = idx
+        # 当段结束时，添加到结果并更新段的起始位置
+        elif current_value != previous_value and start_of_segment is not None:
+            segment = question[start_of_segment:idx]
+            result.append(segment)
+            start_of_segment = None if current_value == 0 else idx
     return result

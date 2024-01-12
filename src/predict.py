@@ -89,7 +89,7 @@ def predict(columns, questions, predict_result_path, pretrain_model_path, column
 
 if __name__ == '__main__':
     hidden_size = 768
-    batch_size = 24
+    batch_size = 12
     question_length = 128
     max_length = 512
     table_path = '../train-datas/table.xlsx'

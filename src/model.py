@@ -43,11 +43,11 @@ class ColClassifierModel(nn.Module):
 
 
 class ValueClassifierModel(nn.Module):
-    def __init__(self, model_path, hidden_size, question_length, cond_value_length=2, dropout=0.5):
+    def __init__(self, model_path, hidden_size, question_length, dropout=0.5):
         super(ValueClassifierModel, self).__init__()
         self.bert = BertModel.from_pretrained(model_path)
         self.dropout = nn.Dropout(dropout)
-        self.cond_vals_classifier = nn.Linear(hidden_size, cond_value_length)
+        self.cond_vals_classifier = nn.Linear(hidden_size, question_length)
         self.question_length = question_length
 
     def forward(self, input_ids=None, attention_mask=None, token_type_ids=None):
