@@ -16,18 +16,20 @@ from utils import get_columns
 
 # label
 class Label(object):
-    def __init__(self, label_agg: List = None, label_conn_op=None, label_cond_ops: List = None,
-                 label_cond_vals: List = None):
+    def __init__(self, label_agg: List = None, label_conn_op=None, label_cond_cols: List = None,
+                 label_cond_ops: List = None, label_cond_vals: List = None):
         """
         训练标签信息
         :param label_agg: 聚合函数
         :param label_conn_op: 连接操作符
+        :param label_cond_cols: 条件操列
         :param label_cond_ops: 条件操作符
         :param label_cond_vals: 条件值
         """
         self.label_agg = label_agg
         self.label_conn_op = label_conn_op
         self.label_cond_ops = label_cond_ops
+        self.label_cond_cols = label_cond_cols
         self.label_cond_vals = label_cond_vals
 
 
@@ -113,7 +115,8 @@ class InputFeatures(object):
             # if contain label data
             label = None
             if len(data) > 1:
-                label = Label(label_agg=data[1], label_conn_op=data[2], label_cond_ops=data[3], label_cond_vals=data[4])
+                label = Label(label_agg=data[1], label_conn_op=data[2], label_cond_cols=data[3], label_cond_ops=data[4],
+                              label_cond_vals=data[5])
             # 编码(question+expressions)
             input_ids, attention_mask, token_type_ids = self.encode_question_with_expressions(self.question_length,
                                                                                               self.max_length,
@@ -144,8 +147,9 @@ class Dataset(torch.utils.data.Dataset):
             label: Label = feature.label
             label_agg = np.array(label.label_agg)
             label_conn_op = np.array(label.label_conn_op)
+            label_cond_cols = np.array(label.label_cond_cols)
             label_cond_ops = np.array(label.label_cond_ops)
             label_cond_vals = np.array([np.array(val) for val in label.label_cond_vals])
-            return input_ids, attention_mask, token_type_ids, cls_idx, label_agg, label_conn_op, label_cond_ops, label_cond_vals
+            return input_ids, attention_mask, token_type_ids, cls_idx, label_agg, label_conn_op, label_cond_cols, label_cond_ops, label_cond_vals
         else:
             return input_ids, attention_mask, token_type_ids, cls_idx

@@ -33,18 +33,19 @@ def read_train_datas(path, question_length, columns):
                 agg[sel_col_item] = agg_op_item
             # conn_op
             conn_op = item['sql']['cond_conn_op']
-            # cond_ops & cond_vals
-            cond_ops = [get_cond_op_dict()['none']] * column_length
+            # cond_cols & cond_ops & cond_vals
+            # +1 默认初始化为不存在的列, question_length需要大于column_length
+            cond_cols = [column_length + 1] * question_length
+            cond_ops = [get_cond_op_dict()['none']] * question_length
             cond_vals = [0] * question_length
             if item['sql'].get('conds') is not None:
                 conds = item['sql']['conds']
                 for idx, cond in enumerate(conds):
-                    cond_col_item = cond[0]
-                    cond_op_item = cond[1]
-                    cond_ops[cond_col_item] = cond_op_item
+                    cond_cols[idx] = cond[0]
+                    cond_ops[idx] = cond[1]
                     value = cond[2]
                     cond_vals = fill_value_start_end(cond_vals, question, value, idx)
-            data_list.append([question, agg, conn_op, cond_ops, cond_vals])
+            data_list.append([question, agg, conn_op, cond_cols, cond_ops, cond_vals])
     return data_list
 
 
@@ -68,7 +69,7 @@ def get_columns(table_path):
 
 
 def get_cond_op_dict():
-    cond_op_dict = {'>': 0, '<': 1, '==': 2, '!=': 3, 'like': 4, '>=': 5, '<=': 6, 'between_and': 7, 'in': 8, 'none': 9}
+    cond_op_dict = {'>': 0, '<': 1, '==': 2, '!=': 3, 'like': 4, '>=': 5, '<=': 6, 'none': 7}
     return cond_op_dict
 
 

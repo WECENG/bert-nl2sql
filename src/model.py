@@ -10,13 +10,12 @@ from transformers import BertModel
 
 
 class ColClassifierModel(nn.Module):
-    def __init__(self, model_path, hidden_size, agg_length, conn_op_length, cond_op_length, dropout=0.5):
+    def __init__(self, model_path, hidden_size, agg_length, conn_op_length, dropout=0.5):
         super(ColClassifierModel, self).__init__()
         self.bert = BertModel.from_pretrained(model_path)
         self.dropout = nn.Dropout(dropout)
         # out classes需要纬度必须大于label中size(classes)，否则会出现Assertion `t >= 0 && t < n_classes` failed.
         self.agg_classifier = nn.Linear(hidden_size, agg_length)
-        self.cond_ops_classifier = nn.Linear(hidden_size, cond_op_length)
         self.conn_op_classifier = nn.Linear(hidden_size, conn_op_length)
 
     def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, cls_idx=None):
@@ -35,29 +34,37 @@ class ColClassifierModel(nn.Module):
         cls_cols = dropout_hidden_state[:, cls_idx[0], :]
 
         out_agg = self.agg_classifier(cls_cols)
-        out_cond_ops = self.cond_ops_classifier(cls_cols)
 
         out_conn_op = self.conn_op_classifier(dropout_output)
 
-        return out_agg, out_cond_ops, out_conn_op
+        return out_agg, out_conn_op
 
 
-class ValueClassifierModel(nn.Module):
+class CondClassifierModel(nn.Module):
     def __init__(self, model_path, hidden_size, question_length, dropout=0.5):
-        super(ValueClassifierModel, self).__init__()
+        super(CondClassifierModel, self).__init__()
         self.bert = BertModel.from_pretrained(model_path)
         self.dropout = nn.Dropout(dropout)
+        # question_length为条件最多个数
+        self.cond_cols_classifier = nn.Linear(hidden_size, question_length)
+        self.cond_ops_classifier = nn.Linear(hidden_size, question_length)
         self.cond_vals_classifier = nn.Linear(hidden_size, question_length)
+        self.cond_count_classifier = nn.Linear(hidden_size, question_length)
         self.question_length = question_length
 
     def forward(self, input_ids=None, attention_mask=None, token_type_ids=None):
         # 输出最后一层隐藏状态
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
+        dropout_output = self.dropout(outputs.pooler_output)
         hidden_state = outputs.last_hidden_state
+
+        out_cond_count = self.cond_count_classifier(dropout_output)
 
         # 提取问题特征信息
         cond_values = hidden_state[:, 1:self.question_length + 1, :]
 
+        out_cond_cols = self.cond_cols_classifier(cond_values)
+        out_cond_ops = self.cond_ops_classifier(cond_values)
         out_cond_vals = self.cond_vals_classifier(cond_values)
 
-        return out_cond_vals
+        return out_cond_cols, out_cond_ops, out_cond_vals, out_cond_count
