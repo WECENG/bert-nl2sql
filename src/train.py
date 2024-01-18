@@ -75,7 +75,7 @@ def train(model: ColClassifierModel or CondClassifierModel, model_save_path, tra
                 lost_cond_ops = criterion(out_cond_ops, label_cond_ops)
                 lost_cond_vals = criterion(out_cond_vals, label_cond_vals)
                 lost_cond_count = criterion(out_cond_count, label_cond_count)
-                total_loss_train = ((lost_cond_cols + lost_cond_vals + lost_cond_ops) * 0.1 + lost_cond_count * 0.9)
+                total_loss_train = ((lost_cond_cols + lost_cond_vals + lost_cond_ops) * 1 + lost_cond_count * 1)
 
             # 模型更新
             model.zero_grad()
@@ -155,7 +155,7 @@ def train(model: ColClassifierModel or CondClassifierModel, model_save_path, tra
             val_cond_vals_acc = metrics.accuracy_score(np.concatenate(out_all_cond_vals, axis=0),
                                                        np.concatenate(label_all_cond_vals, axis=0))
             val_cond_count_acc = metrics.accuracy_score(label_all_cond_count, out_all_cond_count)
-            val_avg_acc = (val_cond_cols_acc + val_cond_ops_acc + val_cond_vals_acc) / 3 * 0.1 + val_cond_count_acc * 0.9
+            val_avg_acc = (val_cond_cols_acc + val_cond_ops_acc + val_cond_vals_acc + val_cond_count_acc) / 4
             # save model
         if val_avg_acc > best_val_avg_acc:
             best_val_avg_acc = val_avg_acc
@@ -198,10 +198,10 @@ if __name__ == '__main__':
     model_train_dataset, model_val_dataset, model_test_dataset = random_split(model_dateset,
                                                                               [train_size, val_size,
                                                                                test_size])
-    # print('train column model begin')
-    # train(col_model, save_column_model_path, model_train_dataset, model_val_dataset, batch_size, learn_rate,
-    #       epochs)
-    # print('train column model finish')
+    print('train column model begin')
+    train(col_model, save_column_model_path, model_train_dataset, model_val_dataset, batch_size, learn_rate,
+          epochs)
+    print('train column model finish')
     cond_model = CondClassifierModel(pretrain_model_path, hidden_size, question_length)
     print('train value model begin')
     train(cond_model, save_value_model_path, model_train_dataset, model_val_dataset, batch_size,

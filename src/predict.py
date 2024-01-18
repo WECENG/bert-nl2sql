@@ -80,8 +80,8 @@ def predict(columns, questions, predict_result_path, pretrain_model_path, column
             cond_op = cond_ops[cond_ops != get_cond_op_dict()['none']]
             sel_col_name = [columns[idx_col] for idx_col in sel_col]
             cond_vals_name = get_values_name(question[0], cond_vals)
-            conds = [[int(cond_col[idx]), int(cond_op[idx]), cond_vals_name[idx]] for
-                     idx in range(len(cond_counts))]
+            conds = [[int(cond_col), int(cond_op), cond_vals_name] for
+                     cond_col, cond_op, cond_vals_name in zip(range(cond_counts), cond_col, cond_op, cond_vals_name)]
             sql_dict = {"question": question, "table_id": table_name,
                         "sql": {"sel": list(map(int, sel_col)),
                                 "agg": list(map(int, agg)),
