@@ -7,6 +7,11 @@ __Created__ = 2023/12/18 16:37
 """
 import json
 import pandas as pd
+import nltk
+import jieba.posseg as psg
+
+from nltk.corpus import stopwords
+from time_extract import time_extract
 
 
 def read_train_datas(path, question_length, columns):
@@ -21,6 +26,7 @@ def read_train_datas(path, question_length, columns):
         data_list = []
         for line in f:
             item = json.loads(line)
+            time_replace(item)
             # question
             question = item['question']
             # agg
@@ -54,13 +60,54 @@ def read_predict_datas(path):
     :param path: 预测数据路径
     :return: 预测数据
     """
+    origin_questions = []
     questions = []
     with open(path, 'r', encoding='utf-8') as f:
         for line in f:
             item = json.loads(line)
+            origin_question = item['question']
+            origin_questions.append([origin_question])
+            time_replace(item)
             question = item['question']
             questions.append([question])
-    return questions
+    return origin_questions, questions
+
+
+def time_replace(data):
+    """
+    时间替换
+    :param data: 数据
+    :return: 数据
+    """
+    question, _ = time_extract(data['question'])
+    data['question'] = question
+    if 'keywords' in data and 'values' in data['keywords']:
+        values = [time_extract(value)[0] for value in data['keywords']['values']]
+        data['keywords']['values'] = values
+    if 'sql' in data and 'conds' in data['sql']:
+        conds = [[value[0], value[1], time_extract(value[2])[0]] for value in data['sql']['conds']]
+        data['sql']['conds'] = conds
+
+
+def stop_words():
+    nltk.download('stopwords')
+    words = stopwords.words('chinese')
+    return words
+
+
+def cut_words_first_end(cut_word_list, content):
+    """
+    剪切词
+    :param cut_word_list: 剪切词列表
+    :param content: 内容
+    :return: 剪切后的内容
+    """
+    cut_result = [word for word, _ in psg.cut(content)]
+    if len(cut_result) > 1 and cut_result[0] in cut_word_list:
+        cut_result.pop(0)
+    if len(cut_result) > 1 and cut_result[-1] in cut_word_list:
+        cut_result.pop(-1)
+    return ''.join(cut_result)
 
 
 def get_columns(table_path):

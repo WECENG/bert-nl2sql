@@ -14,11 +14,12 @@ from tqdm import tqdm
 
 from datasets import InputFeatures, Dataset
 from model import ColClassifierModel, CondClassifierModel
-from utils import get_cond_op_dict, read_predict_datas, get_conn_op_dict, get_columns, get_agg_dict, get_values_name
+from utils import get_cond_op_dict, read_predict_datas, get_conn_op_dict, get_columns, get_agg_dict, get_values_name, \
+    cut_words_first_end, stop_words
 
 
-def predict(columns, questions, predict_result_path, pretrain_model_path, column_model_path, value_model_path,
-            hidden_size, batch_size, question_length, max_length, table_name='table_name'):
+def predict(columns, origin_questions, questions, predict_result_path, pretrain_model_path, column_model_path,
+            value_model_path, hidden_size, batch_size, question_length, max_length, table_name='table_name'):
     # 创建模型
     col_model = ColClassifierModel(pretrain_model_path, hidden_size, len(get_agg_dict()), len(get_conn_op_dict()))
     cond_model = CondClassifierModel(pretrain_model_path, hidden_size, question_length)
@@ -68,21 +69,26 @@ def predict(columns, questions, predict_result_path, pretrain_model_path, column
         pre_all_cond_counts.extend(pre_cond_count)
 
     with open(predict_result_path, 'w', encoding='utf-8') as wf:
-        for question, agg, conn_op, cond_cols, cond_ops, cond_vals, cond_counts in zip(questions, pre_all_agg,
-                                                                                       pre_all_conn_op,
-                                                                                       pre_all_cond_cols,
-                                                                                       pre_all_cond_ops,
-                                                                                       pre_all_cond_vals,
-                                                                                       pre_all_cond_counts):
+        for origin_question, question, agg, conn_op, cond_cols, cond_ops, cond_vals, cond_counts in zip(
+                origin_questions,
+                questions,
+                pre_all_agg,
+                pre_all_conn_op,
+                pre_all_cond_cols,
+                pre_all_cond_ops,
+                pre_all_cond_vals,
+                pre_all_cond_counts):
             sel_col = np.where(np.array(agg) != get_agg_dict()['none'])[0]
             agg = agg[agg != get_agg_dict()['none']]
             cond_col = cond_cols[cond_cols <= len(columns)]
             cond_op = cond_ops[cond_ops != get_cond_op_dict()['none']]
             sel_col_name = [columns[idx_col] for idx_col in sel_col]
-            cond_vals_name = get_values_name(question[0], cond_vals)
+            stop_word_list = stop_words()
+            cond_vals_name = [cut_words_first_end(stop_word_list, value_name) for value_name in
+                              get_values_name(question[0], cond_vals)]
             conds = [[int(cond_col), int(cond_op), cond_vals_name] for
-                     cond_col, cond_op, cond_vals_name in zip(range(cond_counts), cond_col, cond_op, cond_vals_name)]
-            sql_dict = {"question": question, "table_id": table_name,
+                     _, cond_col, cond_op, cond_vals_name in zip(range(cond_counts), cond_col, cond_op, cond_vals_name)]
+            sql_dict = {"question": origin_question, "table_id": table_name,
                         "sql": {"sel": list(map(int, sel_col)),
                                 "agg": list(map(int, agg)),
                                 "limit": 0,
@@ -107,6 +113,7 @@ if __name__ == '__main__':
     column_model_path = '../result-model/classifier-column-model.pkl'
     value_model_path = '../result-model/classifier-value-model.pkl'
     columns = get_columns(table_path)
-    questions = read_predict_datas(predict_question_path)
-    predict(columns, questions, predict_result_path, pretrain_model_path, column_model_path, value_model_path,
+    origin_questions, questions = read_predict_datas(predict_question_path)
+    predict(columns, origin_questions, questions, predict_result_path, pretrain_model_path, column_model_path,
+            value_model_path,
             hidden_size, batch_size, question_length, max_length)
