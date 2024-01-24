@@ -34,8 +34,8 @@ def predict(columns, origin_questions, questions, predict_result_path, pretrain_
     if use_cuda:
         col_model = col_model.to(device)
         cond_model = cond_model.to(device)
-        col_model.load_state_dict(torch.load(column_model_path, map_location=torch.device(device)))
-        cond_model.load_state_dict(torch.load(value_model_path, map_location=torch.device(device)))
+    col_model.load_state_dict(torch.load(column_model_path, map_location=torch.device(device)))
+    cond_model.load_state_dict(torch.load(value_model_path, map_location=torch.device(device)))
     # 预测
     pre_all_agg = []
     pre_all_conn_op = []
